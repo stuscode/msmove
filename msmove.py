@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import argparse
 import tkinter as tk
+from tkinter import ttk
 import threading
 import time
 import queue
@@ -24,44 +26,46 @@ class window(tk.Tk):
       print(self.name)
  
 class wincontrol:
-    def __init__(self, dir, workqueue):
-        self.watchdir = dir
-        self.work = workqueue
-        self.observer = Observer()
+   def __init__(self, dir, workqueue):
+      self.watchdir = dir
+      self.work = workqueue
+      self.observer = Observer()
  
-    def run(self):
+   def run(self):
           #set up handler
-        event_handler = changehandle()
-        self.observer.schedule(event_handler, self.watchdir, recursive = True)
-        self.observer.start()
-          #process work
-        try:
-           while True:
-              name = self.work.get()  #wait for work
-              self.work.put() #put it back for processing
-              win = window(work)
-              if win.exists:
-                 win.lift() #maybe
-                 win.attributes('-topmost', True) #mayb
-                 win.mainloop()
-        except:
-            self.observer.stop()
-            print("Observer Stopped")
+      event_handler = eventhandle()
+      event_handler.setqueue(self.work)
+      self.observer.schedule(event_handler, self.watchdir, recursive = True)
+      self.observer.start()
+       #process work
+      try:
+         while True: 
+            name = self.work.get()  #wait for work
+            self.work.put(name) #put it back for processing
+            win = window(work)
+            if win.exists:
+               win.lift() #maybe
+               win.attributes('-topmost', True) #mayb
+               win.mainloop()
+      except Exception as e:
+         print(e)
+         self.observer.stop()
+         print("Observer Stopped")
  
-        self.observer.join()
+      self.observer.join()
  
-class changehandle(FileSystemEventHandler):
-    @staticmethod
-    def on_any_event(event):
-        if event.is_directory:
-            return None
-        elif event.event_type == 'created':
-            # Event is created, you can process it now
-            print("Watchdog received created event - % s." % event.src_path)
-        elif event.event_type == 'moved':
-            # Event is modified, you can process it now
-            print("Watchdog received moved event - % s % s." % (event.src_path,event.dest_path))
-             
+class eventhandle(FileSystemEventHandler):
+   work = None
+   def setqueue(self, queue):
+      work = queue
+
+   @staticmethod
+   def on_moved(event):
+          #this is the move after the browser finishes download
+      dest = event.dest_path
+      if dest.endswith('.pdf'):  
+         work.put(dest)
+      print(event.src_path, event.dest_path);
 
 def arguments():
    p = argparse.ArgumentParser(description="move monthly statements")
@@ -70,12 +74,13 @@ def arguments():
    args = p.parse_args();
    return(args.srcdir, args.destdirtree)
  
+
 if __name__ == '__main__':
         #process command line arguments
    (srcdir, destdirtree) = arguments()
-   work = queue.Queue
-   winthread = threading.Thread(target=wincontrol, args=(work,))
-   workthread = threading.Thread(target=workget, args=(work,))
-    watch = wincontrol('.')
-    watch.run()
+   work = queue.Queue()
+#winthread = threading.Thread(target=wincontrol, args=(work,))
+#workthread = threading.Thread(target=workget, args=(work,))
+   watch = wincontrol(srcdir, work)
+   watch.run()
 
