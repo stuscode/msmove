@@ -3,26 +3,71 @@
 import argparse
 import tkinter as tk
 from tkinter import ttk
+from tkinter import filedialog
+from tkinter import *
 import threading
 import time
 import queue
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+import watchdog.events
+import watchdog.observers
  
 class window(tk.Tk):
    def __init__(self, workqueue):
       super().__init__()
+      row = 0
       self.work = workqueue
+      self.observer == None
+
       self.wm_title("msmove")
-      self.dobutton = ttk.Button(self, text="Move",command=self.doit)
-      self.dobutton.grid(row=0,column=0)
-      self.cancelbutton = ttk.Button(self, text="Cancel",command=self.destroywin)
-      self.cancelbutton.grid(row=0,column=1)
-#self.name = self.getwork()
-      self.workget = threading.Thread(target=self.getworkthread, args=(self,))
+      self.grid_columnconfigure(2, weight=1)
+      self.srclabel = Label(self, text="source:")
+      self.srclabel.grid(row=row, column= 0)
+      self.srcname = Label(self, width=40)
+      self.srcname.grid(row=row, column=1)
+      row = row + 1
+      self.destlabel = Label(self, text="dest:")
+      self.destlabel.grid(row=row, column= 0)
+      self.destname = Entry(self, width=40)
+      self.destname.grid(row=row, column=1)
+      self.dobutton = Button(self, text="Move",command=self.doit)
+      self.dobutton.grid(row=row,column=2)
+      row = row + 1
+      self.sep1 = ttk.Separator(self,orient=tk.HORIZONTAL)
+      self.sep1.grid(row=row, column=0, columnspan=4, sticky='ew')
+      row = row + 1
+      self.srctextvar = tk.StringVar()
+      self.srcdirlab = Label(self, text="source dir:")
+      self.srcdirlab.grid(row=row, column=0)
+      self.srcdirdis = Entry(self,width=40, textvar = self.srctextvar)
+      self.srcdirdis.grid(row=row, column=1)
+      self.srcdirsel = Button(self, text="Sel",command=self.picsrcdir)
+      self.srcdirsel.grid(row=row, column=2)
+      row = row + 1
+      self.cancelbutton = Button(self, text="Exit",command=self.destroywin)
+      self.cancelbutton.grid(row=row,column=1)
+      row = row + 1
+      self.workget = threading.Thread(target=self.getworkthread)
+      self.workget.start()
       self.movedone = threading.Condition
+      self.lift() #maybe
+      self.attributes('-topmost', True) #maybe
+      self.endqueue = False
+      self.mainloop()
 
+   def observer_restart(self):
+      if self.observer != None:
+         observer_end()
+      self.observer = watchdog.observers.Observer()
+      self.observer.schedule(event_handler, srcdir, recursive = False)
+      self.observer.start()
 
+   def observer_end(self):
+      observer.stop()
+      observer.join()
+
+   def picsrcdir(self):
+      newdir = filedialog.askdirectory()
+      self.srctextvar.set(newdir)
 
    def doit(self):
       print("process ",self.name)
@@ -31,64 +76,34 @@ class window(tk.Tk):
    def getworkthread(self):
       while True:
          self.name = self.work.get()
+         if self.endqueue:
+            break
          print("set filename to ",self.name)
-         self.movedone.wait()
+         self.lift() #maybe
+         self.attributes('-topmost', True) #maybe
 
-   def getwork(self):
-      name = None
-      try:
-         name = self.work.get(block = False)
-         print("got ",name)
-      except queue.Empty:
-         print("destroy")
-#self.destroywin()
-      print("getwork", name)
-      return name
-   #TODO: if there is no work, leave window up
-#also: have mode where window starts up so defaults can be edited
+   def finishqueue(self):
+      self.endqueue = True
+      observer_end()
+      work.put("")  #wake up the get so thread can exit
+
    def destroywin(self):
       self.destroy()
- 
-class wincontrol:
-   def __init__(self, dir, workqueue):
-      self.watchdir = dir
-      self.work = workqueue
-      self.observer = Observer()
- 
-   def run(self):
-          #set up handler
-      event_handler = eventhandle()
-      event_handler.setqueue(self.work)
-      self.observer.schedule(event_handler, self.watchdir, recursive = True)
-      self.observer.start()
-       #process work
-      try:
-         while True: 
-#name = self.work.get()  #wait for work
-#            print("got work 1 ", name)
-#            self.work.put(name) #put it back for processing
-            win = window(work)
-            win.lift() #maybe
-            win.attributes('-topmost', True) #mayb
-            win.mainloop()
-      except Exception as e:
-         print(e)
-         self.observer.stop()
-         print("Observer Stopped")
- 
-      self.observer.join()
- 
-class eventhandle(FileSystemEventHandler):
+
+class eventhandle(watchdog.events.FileSystemEventHandler):
    work = None
    def setqueue(self, queue):
-      work = queue
+      self.work = queue
 
-   @staticmethod
-   def on_moved(event):
+   def setwin(self, window):
+      self.window = window
+
+#@staticmethod
+   def on_moved(self, event):
           #this is the move after the browser finishes download
       dest = event.dest_path
       if dest.endswith('.pdf') or dest.endswith('.PDF'):  
-         work.put(dest)
+         self.work.put(dest)
       print(event.src_path, event.dest_path);
 
 def arguments():
@@ -98,13 +113,18 @@ def arguments():
    args = p.parse_args();
    return(args.srcdir, args.destdirtree)
  
-
 if __name__ == '__main__':
         #process command line arguments
    (srcdir, destdirtree) = arguments()
    work = queue.Queue()
-#winthread = threading.Thread(target=wincontrol, args=(work,))
-#workthread = threading.Thread(target=workget, args=(work,))
-   watch = wincontrol(srcdir, work)
-   watch.run()
+   event_handler = eventhandle()
+   event_handler.setqueue(work)
 
+   observer = watchdog.observers.Observer()
+   observer.schedule(event_handler, srcdir, recursive = False)
+   observer.start()
+
+   win = window(work) #when this returns we are done
+   win.finishqueue()
+   observer.stop()
+   observer.join()
