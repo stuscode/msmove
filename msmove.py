@@ -18,12 +18,36 @@ class window(tk.Tk):
       self.dobutton.grid(row=0,column=0)
       self.cancelbutton = ttk.Button(self, text="Cancel",command=self.destroywin)
       self.cancelbutton.grid(row=0,column=1)
-      self.name = self.getwork()
-      if self.name == None:
-         self.exists = False
-      else:
-         self.exists = True
-      print(self.name)
+#self.name = self.getwork()
+      self.workget = threading.Thread(target=self.getworkthread, args=(self,))
+      self.movedone = threading.Condition
+
+
+
+   def doit(self):
+      print("process ",self.name)
+      self.movedone.notify()
+
+   def getworkthread(self):
+      while True:
+         self.name = self.work.get()
+         print("set filename to ",self.name)
+         self.movedone.wait()
+
+   def getwork(self):
+      name = None
+      try:
+         name = self.work.get(block = False)
+         print("got ",name)
+      except queue.Empty:
+         print("destroy")
+#self.destroywin()
+      print("getwork", name)
+      return name
+   #TODO: if there is no work, leave window up
+#also: have mode where window starts up so defaults can be edited
+   def destroywin(self):
+      self.destroy()
  
 class wincontrol:
    def __init__(self, dir, workqueue):
@@ -40,13 +64,13 @@ class wincontrol:
        #process work
       try:
          while True: 
-            name = self.work.get()  #wait for work
-            self.work.put(name) #put it back for processing
+#name = self.work.get()  #wait for work
+#            print("got work 1 ", name)
+#            self.work.put(name) #put it back for processing
             win = window(work)
-            if win.exists:
-               win.lift() #maybe
-               win.attributes('-topmost', True) #mayb
-               win.mainloop()
+            win.lift() #maybe
+            win.attributes('-topmost', True) #mayb
+            win.mainloop()
       except Exception as e:
          print(e)
          self.observer.stop()
@@ -63,7 +87,7 @@ class eventhandle(FileSystemEventHandler):
    def on_moved(event):
           #this is the move after the browser finishes download
       dest = event.dest_path
-      if dest.endswith('.pdf'):  
+      if dest.endswith('.pdf') or dest.endswith('.PDF'):  
          work.put(dest)
       print(event.src_path, event.dest_path);
 
