@@ -57,14 +57,7 @@ class window(tk.Tk):
       self.filedone = threading.Event()
 
       self.pdfp = pdfpreview(self)
-      self.pdfp.grid(row=row,column=0,columnspan=5,rowspan=2,sticky='nsew')
-#TODO: straighten out this button placement
-      self.pup = Button(self, text="U",width=2,command=self.pdfp.pageup)
-      self.pup.grid(row=row,column=4)
-      row = row + 1
-      self.pdn = Button(self, text="D",width=2,command=self.pdfp.pagedown)
-      self.pdn.grid(row=row,column=4)
-#      self.pdfp.grid(row=row,column=0,columnspan=6,sticky='nsew')
+      self.pdfp.grid(row=row,column=0,columnspan=5,sticky='nsew')
       row = row + 1
       self.sep1 = ttk.Separator(self,orient=tk.HORIZONTAL)
       self.sep1.grid(row=row, column=0, columnspan=5, sticky='ew')
@@ -367,27 +360,12 @@ class pdfpreview(Frame):
       self.vscroll = ttk.Scrollbar(self,orient=tk.VERTICAL,command=self.canvas.yview)
       self.canvas['yscrollcommand'] = self.vscroll.set
       self.vscroll.grid(row=0,column=1,sticky='ns')
+      self.canvas.bind_all("<Button-4>", lambda event: self.canvas.yview_scroll(-1, "units"))
+      self.canvas.bind_all("<Button-5>", lambda event: self.canvas.yview_scroll(1, "units"))
+
       self.doc = None
       self.pagenum = 0
       self.pages=[]
-
-#TODO: canvas keeps enlarging, probably because of overlay buttons
-#TODO: try just putting all pages on scrollable canvas...should be nicer
-
-   def pageup(self):
-      print(self.pagenum)
-      if self.doc != None:
-         print(self.pagenum)
-         if self.pagenum < (len(self.doc) - 1):
-            self.pagenum = self.pagenum + 1
-            self.displaypage(self.pagenum)
-
-   def pagedown(self):
-      if self.doc != None:
-         print(self.pagenum)
-         if self.pagenum > 0:
-            self.pagenum = self.pagenum - 1
-            self.displaypage(self.pagenum)
 
    def clear(self):
       self.canvas.delete('all')
@@ -404,6 +382,7 @@ class pdfpreview(Frame):
 #      print(self.canvas.__getitem__('width'))
 #      print(self.canvas.__getitem__('height'))
 #int(canvas.__getitem__('width'))
+
    def setpages(self):
       w = self.winfo_width()
       h = self.winfo_height()
@@ -424,26 +403,9 @@ class pdfpreview(Frame):
       self.canvas.config(width=w,height=h,scrollregion=(0,0,w,ypos))
       ypos = 0
       for p in self.pages:
-         ih = p.height 
-         self.canvas.create_image(0,ypos,anchor=NW,image=p)
+         ih = p.height()
+         self.canvas.create_image((0,ypos),anchor=NW,image=p)
          ypos = ypos + ih
-
-   def displaypage(self,p):
-      w = self.winfo_width()
-      h = self.winfo_height()
-      pix = self.doc[p].get_pixmap()
-      im1 = PIL.Image.open(io.BytesIO(pix.pil_tobytes('ppm')))
-      ih = im1.height
-      iw = im1.width
-      nw = w
-      ratio = iw/w
-      nh = int(ratio * ih)
-      im2 = im1.resize((nw,nh)) 
-      buf = io.BytesIO()
-      im2.save(buf, format='PPM')
-      self.img = PhotoImage(data=buf.getvalue())
-      self.canvas.config(width=w,height=h,scrollregion=(0,0,w,nh))
-      self.canvas.create_image(0,0,anchor=NW,image=self.img)
 
 class dirlistpanel(Frame):
    def __init__(self, c):
