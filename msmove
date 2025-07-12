@@ -397,12 +397,37 @@ class pdfpreview(Frame):
    def setfile(self,f):
       self.doc = fitz.open(f)
       self.pagenum = 0
-      self.displaypage(self.pagenum)
+#      self.displaypage(self.pagenum)
+      self.setpages()
 #      print(self.winfo_width())
 #      print(self.winfo_height())
 #      print(self.canvas.__getitem__('width'))
 #      print(self.canvas.__getitem__('height'))
 #int(canvas.__getitem__('width'))
+   def setpages(self):
+      w = self.winfo_width()
+      h = self.winfo_height()
+      ypos = 0
+      for p in self.doc:
+         pix = p.get_pixmap()
+         im1 = PIL.Image.open(io.BytesIO(pix.pil_tobytes('ppm')))
+         ih = im1.height 
+         iw = im1.width
+         nw = w
+         ratio = iw/w
+         nh = int(ratio * ih)
+         im2 = im1.resize((nw,nh))
+         buf = io.BytesIO()
+         im2.save(buf, format='PPM')
+         self.pages.append(PhotoImage(data=buf.getvalue()))
+         ypos = ypos + nh
+      self.canvas.config(width=w,height=h,scrollregion=(0,0,w,ypos))
+      ypos = 0
+      for p in self.pages:
+         ih = p.height 
+         self.canvas.create_image(0,ypos,anchor=NW,image=p)
+         ypos = ypos + ih
+
    def displaypage(self,p):
       w = self.winfo_width()
       h = self.winfo_height()
@@ -419,7 +444,6 @@ class pdfpreview(Frame):
       self.img = PhotoImage(data=buf.getvalue())
       self.canvas.config(width=w,height=h,scrollregion=(0,0,w,nh))
       self.canvas.create_image(0,0,anchor=NW,image=self.img)
-      print('set')
 
 class dirlistpanel(Frame):
    def __init__(self, c):
