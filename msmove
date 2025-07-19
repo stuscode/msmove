@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-#TODO: when file is ready to move, exit doesn't exit entire program
-
 import argparse
 from calendar import month_name
 #import copy
@@ -71,6 +69,7 @@ class window(tk.Tk):
       row = row + 1
       self.destlabel = Label(self, text="dest:")
       self.destlabel.grid(row=row, column= 0, sticky=E)
+#TODO: resize
       self.destname = Entry(self, width=40, textvar=self.destnamevar)
       self.destname.grid(row=row, column=1, columnspan=2, sticky=W)
       self.dobutton = Button(self, text="Move",width=4,command=self.doit)
@@ -131,6 +130,7 @@ class window(tk.Tk):
 #      row = row + 1
       self.idpattlabel = Label(self, text="id pattern:", anchor='e')
       self.idpattlabel.grid(row=row, column= 0, sticky=E)
+#TODO: resize
       self.idpattname = Entry(self, width=45, textvar=self.idpattnamevar)
       self.idpattname.grid(row=row, column=1, columnspan=4, sticky=W)
       self.idbutton = Button(self, text="Get",width=4,command=self.usermodidget)
@@ -138,12 +138,13 @@ class window(tk.Tk):
       row = row + 1
       self.pattlabel = Label(self, text="rename pattern:", anchor='e')
       self.pattlabel.grid(row=row, column= 0, sticky=E)
+#TODO: resize
       self.pattname = Entry(self, width=45, textvar=self.pattnamevar)
       self.pattname.grid(row=row, column=1, columnspan=4, sticky=W)
       self.pattbutton = Button(self, text="Save",width=4,command=self.usermodidpat)
       self.pattbutton.grid(row=row,column=4)
       row = row + 1
-      self.grid_rowconfigure(row,weight=1)
+#      self.grid_rowconfigure(row,weight=1)
       self.dirlist=dirlistpanel(self)
       self.dirlist.grid(row=row,column=0,columnspan=5,sticky='nsew')
 
@@ -214,7 +215,6 @@ class window(tk.Tk):
       self.observer = watchdog.observers.Observer()
       event_handler = eventhandle()
       event_handler.setqueue(self.work)
-      print("eventhandle ",self.srcdir)
       self.observer.schedule(event_handler, self.srcdir, recursive = False)
       self.observer.start()
 
@@ -313,10 +313,12 @@ class window(tk.Tk):
 #TODO: Here is where we guess what the destdir is
             #wait until file processed
          self.filedone.wait()
+         print(self.endqueue)
 
 #TODO use self.renamepattern to set destination name
-         self.lift() #maybe
-         self.attributes('-topmost', True) #maybe
+         if not self.endqueue:
+            self.lift() #maybe
+            self.attributes('-topmost', True) #maybe
 
    def finishwin(self):
       self.filedone.set() #make sure we don't get hung up here
@@ -328,6 +330,7 @@ class window(tk.Tk):
       work.put("")  #wake up the get so thread can exit
 
    def destroywin(self):
+      self.finishup()
       self.filedone.set() #make sure we don't get hung up here
       self.destroy()
 
@@ -353,8 +356,6 @@ class pdfpreview(Frame):
       self.grid_rowconfigure(0,weight=1)
       self.grid_columnconfigure(0,weight=1)
       self.canvas = Canvas(self
-#                            width=500, 
-#                            height=300, 
                           )
       self.canvas.grid(row=0,column=0,sticky='nsew')
       self.vscroll = ttk.Scrollbar(self,orient=tk.VERTICAL,command=self.canvas.yview)
@@ -362,6 +363,7 @@ class pdfpreview(Frame):
       self.vscroll.grid(row=0,column=1,sticky='ns')
       self.canvas.bind_all("<Button-4>", lambda event: self.canvas.yview_scroll(-1, "units"))
       self.canvas.bind_all("<Button-5>", lambda event: self.canvas.yview_scroll(1, "units"))
+      self.canvas.bind("<Configure>", self.resize_canvas)
 
       self.doc = None
       self.pagenum = 0
@@ -406,6 +408,9 @@ class pdfpreview(Frame):
          ih = p.height()
          self.canvas.create_image((0,ypos),anchor=NW,image=p)
          ypos = ypos + ih
+
+   def resize_canvas(self, e):
+      print(e.height, e.width)
 
 class dirlistpanel(Frame):
    def __init__(self, c):
@@ -538,7 +543,6 @@ class eventhandle(watchdog.events.FileSystemEventHandler):
 
    def on_moved(self, event):
           #this is the move after the browser finishes download
-      print("on_move")
       dest = event.dest_path
       lowerdest = dest.lower()
       for ext in INTERESTINGEXTENSIONS:
