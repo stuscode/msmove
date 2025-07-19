@@ -366,7 +366,6 @@ class pdfpreview(Frame):
       self.canvas.bind("<Configure>", self.resize_canvas)
 
       self.doc = None
-      self.pagenum = 0
       self.pages=[]
 
    def clear(self):
@@ -376,9 +375,11 @@ class pdfpreview(Frame):
 
    def setfile(self,f):
       self.doc = fitz.open(f)
-      self.pagenum = 0
-#      self.displaypage(self.pagenum)
-      self.setpages()
+      self.pageimages=[]
+      for p in self.doc:
+         pix = p.get_pixmap()
+         self.pageimages.append(PIL.Image.open(io.BytesIO(pix.pil_tobytes('ppm'))))
+#self.setpages()
 #      print(self.winfo_width())
 #      print(self.winfo_height())
 #      print(self.canvas.__getitem__('width'))
@@ -389,9 +390,7 @@ class pdfpreview(Frame):
       w = self.winfo_width()
       h = self.winfo_height()
       ypos = 0
-      for p in self.doc:
-         pix = p.get_pixmap()
-         im1 = PIL.Image.open(io.BytesIO(pix.pil_tobytes('ppm')))
+      for im1 in self.pageimages:
          ih = im1.height 
          iw = im1.width
          nw = w
@@ -410,6 +409,7 @@ class pdfpreview(Frame):
          ypos = ypos + ih
 
    def resize_canvas(self, e):
+      self.setpages()
       print(e.height, e.width)
 
 class dirlistpanel(Frame):
