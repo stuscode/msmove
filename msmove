@@ -498,7 +498,7 @@ class dirlistpanel(Frame):
          (newname, pattern, lessused) = self.getinfo(d)
          if showless == 1 or lessused == 0:
             self.displaylist.append(d.name)
-            self.dirlist.append(destdir(d, newname, pattern, lessused))
+            self.dirlist.append(d.name)
       self.listvar.set(self.displaylist)
       self.list.select_set(0)  #as if first row selected
       self.selectrow(0) #set up variables
@@ -507,11 +507,13 @@ class dirlistpanel(Frame):
          #we are setting a row programmatically
    def selectrow(self, row):  #row 0 based
       if row < len(self.dirlist):
-         self.select_cb.userdirselection(self.dirlist[row].idpattern,self.dirlist[row].renamepattern)
+         full = os.path.join(self.topdir, self.dirlist[row])
+         self.select_cb.setdestfilename()
+#self.select_cb.userdirselection(self.dirlist[row].idpattern,self.dirlist[row].renamepattern)
 
 #TODO fix getting info from existing
    def getinfo(self,d):
-      full = os.path.join(self.topdir, d.path)
+      full = os.path.join(self.topdir, d)
       (idpat, renpat, lu) = self.select_cb.config.getdirdat(full)
       return (idpat, renpat, lu)
 
@@ -525,7 +527,7 @@ class dirlistpanel(Frame):
 
    def getselecteddir(self):
       row = self.list.curselection()[0] #single select mode, and we always have something selected.
-      full = os.path.join(self.topdir, self.dirlist[row].path)
+      full = os.path.join(self.topdir, self.dirlist[row])
 #      full = self.dirlist[row].path
       return full
 
@@ -533,7 +535,8 @@ class dirlistpanel(Frame):
       s = self.list.curselection()
       if len(s) > 0:
          row = s[0] #single select mode, and we always have something selected.
-         pat = self.dirlist[row].idpattern
+         full = os.path.join(self.topdir, self.dirlist[row])
+         pat = self.config.getdiridpat(full)
          return pat
       else:
          return ''
@@ -542,7 +545,8 @@ class dirlistpanel(Frame):
       s = self.list.curselection()
       if len(s) > 0:
          row = s[0] #single select mode, and we always have something selected.
-         return self.dirlist[row].lessused
+         full = os.path.join(self.topdir, self.dirlist[row])
+         return self.config.getdirlu(full)
       else:
          return 0
 
@@ -550,7 +554,8 @@ class dirlistpanel(Frame):
       s = self.list.curselection()
       if len(s) > 0:
          row = s[0] #single select mode, and we always have something selected.
-         pat = self.dirlist[row].renamepattern
+         full = os.path.join(self.topdir, self.dirlist[row])
+         pat = self.config.getdirrenpat(full)
          if len(pat) == 0:
             pat = DEFAULTRENAME
    #      full = os.path.join(self.dirlist[row].path, pat)
@@ -559,24 +564,29 @@ class dirlistpanel(Frame):
          return ''
 
    def setselectedrenamepat(self, newpat):
-      row = self.list.curselection()[0] #single select mode, and we always have something selected.
-      self.dirlist[row].renamepattern = newpat
-#self.select_cb.config.setdirpat(self.getselectedidpat(), newpat)
+      s = self.list.curselection()
+      if len(s) > 0:
+         row = s[0]
+         full = os.path.join(self.topdir, self.dirlist[row])
+         self.config.setdirrenpat(full, newpat)
    
    def setselectedidpat(self, newpat):
-      sel = self.list.curselection()
-      if len(sel) > 0:
-         row = self.list.curselection()[0] #single select mode
-         self.dirlist[row].idpattern = newpat
-#self.select_cb.config.setdirpat(self.getselectedidpat(), newpat)
+      s = self.list.curselection()
+      if len(s) > 0:
+         row = s[0]
+         full = os.path.join(self.topdir, self.dirlist[row])
+         self.config.setdiridpat(full, newpat)
    
    def setselectedlessused(self, lessused):
-      row = self.list.curselection()[0] #single select mode, and we always have something selected.
-      self.dirlist[row].lessused = lessused
-      self.select_cb.config.setdirlu(self.getselecteddir(), lessused)
-      showless = self.select_cb.showlessvar.get()
-      if showless == 0:
-         self.displaytopdir()
+      s = self.list.curselection()
+      if len(s) > 0:
+         row = s[0]
+         full = os.path.join(self.topdir, self.dirlist[row])
+         self.config.setdirlu(full, lessused)
+#self.select_cb.config.setdirlu(self.getselecteddir(), lessused)
+         showless = self.select_cb.showlessvar.get()
+         if showless == 0:  #redisplay if this one gets undisplayed
+            self.displaytopdir()
       
 class destdir():
    def __init__(self, path, idpattern, newname, lessused):
@@ -676,6 +686,53 @@ class configfile():
 #print (dat['idpat'], dat['renpat'], dat['lu'])
             return (dat['idpat'], dat['renpat'], dat['lu'])
       return ('','',0)
+   def setdirdat(self, d, idpat, renpat, lu):
+      for dat in self.confdat['dirinfo']:
+         if dat['dir'] == d:
+            dat['renpat'] = renpat
+            dat['idpat'] = idpat
+            dat['lu'] = lu
+            self.writeconfig()
+            return 
+      self.confdat['dirinfo'].append({'dir':d,'lu':lu,'renpat':renpat,'idpat':idpat})
+      self.writeconfig()
+      return 
+   def getdirrenpat(self,d):
+      for dat in self.confdat['dirinfo']:
+         if dat['dir'] == d:
+            return dat['renpat']
+      return ''
+
+   def setdirrenpat(self,d,renpat):
+      for dat in self.confdat['dirinfo']:
+         if dat['dir'] == d:
+            dat['renpat'] = renpat
+            self.writeconfig()
+            return
+      self.confdat['dirinfo'].append({'dir':d,'lu':'','renpat':renpat,'idpat':''})
+      self.writeconfig()
+
+   def getdiridpat(self,d):
+      for dat in self.confdat['dirinfo']:
+         if dat['dir'] == d:
+            return dat['idpat']
+      return ''
+
+   def setdiridpat(self,d,idpat):
+      for dat in self.confdat['dirinfo']:
+         if dat['dir'] == d:
+            dat['idpat'] = idpat
+            self.writeconfig()
+            return
+      self.confdat['dirinfo'].append({'dir':d,'lu':'','renpat':'','idpat':idpat})
+      self.writeconfig()
+
+   def getdirlu(self,d):
+      for dat in self.confdat['dirinfo']:
+         if dat['dir'] == d:
+            return dat['lu']
+      return 0
+
    def setdirlu(self,d,lu):
       for dat in self.confdat['dirinfo']:
          if dat['dir'] == d:
