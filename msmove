@@ -296,12 +296,23 @@ class window(tk.Tk):
       self.islessvar.set(destused)
       self.setdestfilename()
 
+   def srcnamebase(self):
+      f = self.srcnamevar.get()
+      fname, fext = os.path.splitext(f)
+      return fname
+
+   def srcnameext(self):
+      f = self.srcnamevar.get()
+      fname, fext = os.path.splitext(f)
+      return fext
+
+#TODO: carry filename extension (.pdf usually)
    def setdestfilename(self):
       destpat = self.dirlist.getselectedrenamepat()
 #self.pattnamevar.set(destpat)  #TODO maybe dupe setpatterndisplay
       if len(destpat) > 0:
          if '%f' in destpat:
-            destpat = destpat.replace('%f', self.srcnamevar.get())
+            destpat = destpat.replace('%f', self.srcnamebase())
          destdir = self.dirlist.getselecteddir()
          fullpathpat = os.path.join(destdir, destpat)
          if self.forceckboxvar.get() == 1:
@@ -312,7 +323,7 @@ class window(tk.Tk):
             time = datetime.datetime.fromisoformat('yyyymmdd')
          else:
             time = datetime.datetime.now()
-         self.destfilename = time.strftime(fullpathpat)
+         self.destfilename = time.strftime(fullpathpat) + self.srcnameext()
 #      self.destname.delete(0, END)
 #      self.destname.insert(0, self.destfilename)
          self.destnamevar.set(self.destfilename)
