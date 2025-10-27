@@ -8,6 +8,7 @@ import datetime
 import fitz
 import os
 import io
+import pathlib
 import PIL.Image
 import PIL.ImageTk
 #from PIL import Image, ImageTk
@@ -80,6 +81,8 @@ class window(tk.Tk):
       self.srcname = Label(self, width=40, textvar=self.srcnamevar)
       self.srcname.grid(row=row, column=1, columnspan=3, sticky=W)
 #self.cancelbutton = Button(self, text="Exit",width=4,command=self.destroywin)
+      self.deletebutton = Button(self, text="Delete",width=4,command=self.delete)
+      self.deletebutton.grid(row=row,column=3)
       self.cancelbutton = Button(self, text="Exit",width=4,command=self.unified_termination)
       self.cancelbutton.grid(row=row,column=4)
       row = row + 1
@@ -253,7 +256,7 @@ class window(tk.Tk):
 
    def dontdoit(self):
            #get next file or wait
-      print("dont")
+      #print("dont")
          #clear source
       self.srcnamevar.set("")
       self.pdfp.clear()
@@ -271,7 +274,7 @@ class window(tk.Tk):
          #execute copy from self.name to destdir/destname
       t = threading.Thread(target=self.moveitthread, args=(self.name, self.destnamevar.get()))
       t.start()
-      print("process ",self.destnamevar.get(), ' ', self.name)
+      #print("process ",self.destnamevar.get(), ' ', self.name)
          #clear source
       self.srcnamevar.set("")
       self.pdfp.clear()
@@ -279,6 +282,14 @@ class window(tk.Tk):
            #get next file or wait
       self.filedone.set()
 
+#called when delete button hit.  Delete the file.
+   def delete(self): 
+      ans = messagebox.askyesno(title='Confirm Delete', message = 'Really Delete?')
+      if ans == True:
+         pathlib.Path.unlink(self.name)
+         self.dontdoit()
+
+#called when move button hit
    def doit(self):
       dest = self.destnamevar.get()
       if os.path.exists(dest):
