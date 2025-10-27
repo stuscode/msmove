@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import base64
 from calendar import month_name
 #import copy
 import datetime
@@ -8,6 +9,7 @@ import fitz
 import os
 import io
 import PIL.Image
+import PIL.ImageTk
 #from PIL import Image, ImageTk
 import signal
 import threading
@@ -26,10 +28,20 @@ import shutil
 
 DEFAULTRENAME='statement_%Y%m'
 INTERESTINGEXTENSIONS=('pdf','ps')
+#from PIL import Image, ImageTk
+
  
 class window(tk.Tk):
    def __init__(self, workqueue, srcdir, destdirtree, config):
       super().__init__()
+#      ico = PIL.Image.open('file-move-icon.png')
+#      photo = PIL.ImageTk.PhotoImage(ico)
+      data = base64.b64decode(icon64)
+      buf = io.BytesIO(data)
+      ico = PIL.Image.open(buf)
+      photo = PIL.ImageTk.PhotoImage(ico)
+
+      self.wm_iconphoto(False, photo)
       self.work = workqueue
       self.observer = None
       self.srcdir = srcdir
@@ -279,6 +291,7 @@ class window(tk.Tk):
          self.domove()
       
 
+#TODO: fix this so that it doesn't reset the displayed selected directory
    def updatepatternfromuser(self):
       idpat = self.idpattnamevar.get()
       self.dirlist.setselectedidpat(idpat)
@@ -787,7 +800,43 @@ def arguments(config):
    p.add_argument('destdirtree', nargs='?', default=config.getdestdir())
    args = p.parse_args();
    return(os.path.expanduser(args.srcdir), os.path.expanduser(args.destdirtree))
- 
+
+icon64 = """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"""
+
 if __name__ == '__main__':
    global win
         #process command line arguments
