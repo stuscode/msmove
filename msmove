@@ -100,11 +100,14 @@ class window(tk.Tk):
       row = row + 1
       self.forcelabel = Label(self, text="force date:")
       self.forcelabel.grid(row=row, column= 0)
+#TODO: look at calendar.dateentry to replace or add to these
       self.forcemonth = monthsel(self)
       self.forcemonth.grid(row=row, column = 1)
+      self.forcemonth.bind('<<ComboboxSelected>>', self.forcedate)
       self.forceyear = yearsel(self)
       self.forceyear.grid(row=row, column = 2)
-      self.forceckbox = ttk.Checkbutton(self, text='Use this as date', variable=self.forceckboxvar)
+      self.forceyear.bind('<KeyRelease>', self.forcedate)
+      self.forceckbox = ttk.Checkbutton(self, text='Use this as date', variable=self.forceckboxvar, command=self.forcedate)
       self.forceckbox.state(['!selected'])
       self.forceckbox.grid(row=row, column=3, columnspan=2)
       row = row + 1
@@ -330,6 +333,10 @@ class window(tk.Tk):
       fname, fext = os.path.splitext(f)
       return fext
 
+   def forcedate(*args):
+      self = args[0]
+      self.setdestfilename()
+
 #TODO: carry filename extension (.pdf usually)
    def setdestfilename(self):
       destpat = self.dirlist.getselectedrenamepat()
@@ -340,11 +347,15 @@ class window(tk.Tk):
          destdir = self.dirlist.getselecteddir()
          fullpathpat = os.path.join(destdir, destpat)
          if self.forceckboxvar.get() == 1:
-            years = self.forceyear.cget("text")
+            years = self.forceyear.get()
+            years = ''.join(filter(str.isdigit, years))
+            if len(years) != 4:
+               return   #probably editing the year
             year = int(years)
-            month = self.forcemonth.get() + 1  #zero based
-   #ymd = "%4d%2d01" % (year, month)
-            time = datetime.datetime.fromisoformat('yyyymmdd')
+            month = self.forcemonth.current() + 1  #zero based
+            ymd = "%4d%.2d01" % (year, month)
+#time = datetime.datetime.fromisoformat('yyyymmdd')
+            time = datetime.datetime.fromisoformat(ymd)
          else:
             time = datetime.datetime.now()
          self.destfilename = time.strftime(fullpathpat) + self.srcnameext()
