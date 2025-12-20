@@ -63,7 +63,7 @@ class window(tk.Tk):
       self.idpattnamevar = tk.StringVar()
 
    def wincreate(self):
-      self.geometry("800x1000")
+      self.geometry("900x1000")
       row = 0
       self.wm_title("msmove")
 #self.grid_columnconfigure(tuple(range(6)), weight=1)
