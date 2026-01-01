@@ -80,8 +80,46 @@ class window(tk.Tk):
       self.srclabel = Label(self, text="source:")
       self.srclabel.grid(row=row, column= 0, sticky=E)
       self.srcname = Label(self, width=40, textvar=self.srcnamevar)
-      self.srcname.grid(row=row, column=1, columnspan=3, sticky=W)
-#self.cancelbutton = Button(self, text="Exit",width=4,command=self.destroywin)
+      self.srcname.grid(row=row, column=1, columnspan=2, sticky=W)
+
+#Page control frame
+      pgcontframe = ttk.Frame(self)
+      style = ttk.Style()
+      style.layout(
+            'Left2.TButton',[
+                ('Button.focus', {'children': [
+                    ('Button.leftarrow', None),
+                    ('Button.padding', {'sticky': 'nswe', 'children': [
+                        ('Button.label', {'sticky': 'nswe'}
+                         )]}
+                     )]}
+                 )]
+            )
+      style.layout(
+            'Right2.TButton',[
+                ('Button.focus', {'children': [
+                    ('Button.rightarrow', None),
+                    ('Button.padding', {'sticky': 'nswe', 'children': [
+                        ('Button.label', {'sticky': 'nswe'}
+                         )]}
+                     )]}
+                 )]
+            )
+
+      style.configure('Left2.TButton',font=('','8','bold'), width=1, arrowcolor='black',command=self.pageminus)
+      style.configure('Right2.TButton',font=('','8','bold'), width=1, arrowcolor='black',command=self.pageplus)
+      self.lbutton2 = ttk.Button(pgcontframe, style='Left2.TButton',text='', command=self.pageminus)
+      self.rbutton2 = ttk.Button(pgcontframe, style='Right2.TButton',text='', command=self.pageplus)
+      self.lbutton2.grid(row=1,column=1)
+      self.rbutton2.grid(row=1,column=3)
+      self.curpgeLabel = Label(pgcontframe, text='0')
+      self.cursepLabel = Label(pgcontframe, text='/')
+      self.curtotLabel = Label(pgcontframe, text='0')
+      self.curpgeLabel.grid(row=2, column=1)
+      self.cursepLabel.grid(row=2, column=2)
+      self.curtotLabel.grid(row=2, column=3)
+      pgcontframe.grid(row=row, column=2, rowspan=2)
+
       self.deletebutton = Button(self, text="Delete",width=4,command=self.delete)
       self.deletebutton.grid(row=row,column=3)
       self.cancelbutton = Button(self, text="Exit",width=4,command=self.unified_termination)
@@ -160,6 +198,7 @@ class window(tk.Tk):
       self.pattlabel = Label(self, text="rename pattern:", anchor='e')
       self.pattlabel.grid(row=row, column= 0, sticky=E)
       self.pattname = Entry(self, width=45, textvar=self.pattnamevar)
+      self.pattname.bind('<KeyRelease>', self.forcedate)
       self.pattname.grid(row=row, column=1, columnspan=4, sticky=W)
       self.pattbutton = Button(self, text="Save",width=4,command=self.usermodidpat)
       self.pattbutton.grid(row=row,column=4)
@@ -167,6 +206,12 @@ class window(tk.Tk):
 #      self.grid_rowconfigure(row,weight=1)
       self.dirlist=dirlistpanel(self, self.config)
       self.dirlist.grid(row=row,column=0,columnspan=5,sticky='nsew')
+
+   def pageminus(self):
+      print("minus")
+
+   def pageplus(self):
+      print("plus")
 
    def config_save(self):
       self.config.setsourcedir(self.srcdir)
@@ -334,14 +379,17 @@ class window(tk.Tk):
       fname, fext = os.path.splitext(f)
       return fext
 
+    #callback when key is released in Entry
    def forcedate(*args):
       self = args[0]
       self.setdestfilename()
 
+
 #TODO: carry filename extension (.pdf usually)
+    #entry to update of name that won't pull the selected pattern. for edits.
    def setdestfilename(self):
-      destpat = self.dirlist.getselectedrenamepat()
-#self.pattnamevar.set(destpat)  #TODO maybe dupe setpatterndisplay
+#destpat = self.dirlist.getselectedrenamepat()
+      destpat = self.pattnamevar.get()
       if len(destpat) > 0:
          if '%f' in destpat:
             destpat = destpat.replace('%f', self.srcnamebase())
@@ -597,6 +645,7 @@ class dirlistpanel(Frame):
       else:
          return 0
 
+    #get the rename pattern from the Entry box
    def getselectedrenamepat(self):
       s = self.list.curselection()
       if len(s) > 0:
