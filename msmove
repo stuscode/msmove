@@ -441,8 +441,6 @@ class window(tk.Tk):
    def unified_termination(self):
 #if one wants to ask if they are sure about exiting, then 
 #checking self.work.empty() and also whether we are displaying a file
-      print('queue empty', self.work.empty())
-      print('not working', self.nowork)
       if self.work.empty() == False or self.nowork == False:
          ans = messagebox.askyesno(title='Exit with work', message = 'Work remains, really exit?')
          if ans == False:
