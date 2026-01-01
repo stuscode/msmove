@@ -43,8 +43,9 @@ class window(tk.Tk):
       photo = PIL.ImageTk.PhotoImage(ico)
 
       self.wm_iconphoto(False, photo)
-      self.work = workqueue
-      self.observer = None
+      self.work = workqueue  #queue to move files from callback to worklist
+      self.worklist = [1,2]     #list of files that we are working with
+      self.worklistpos = 0  #starts from 1 index in worklist
       self.srcdir = srcdir
       self.destdirtree = destdirtree
       self.endqueue = False
@@ -207,11 +208,29 @@ class window(tk.Tk):
       self.dirlist=dirlistpanel(self, self.config)
       self.dirlist.grid(row=row,column=0,columnspan=5,sticky='nsew')
 
+   def addtoworklist(self, n):
+      self.worklist.append(n)
+      self.setworklistsizedisplay()
+
+   def delfromworklist(self,pos):
+      del self.worklist[pos-1]  #position is index plus 1
+      self.setworklistsizedisplay()
+
    def pageminus(self):
-      print("minus")
+      if self.worklistpos > 1:
+         self.worklistpos = self.worklistpos - 1
+         self.setworklistposdisplay()
 
    def pageplus(self):
-      print("plus")
+      if self.worklistpos < len(self.worklist):
+         self.worklistpos = self.worklistpos + 1
+         self.setworklistposdisplay()
+
+   def setworklistposdisplay(self):
+      self.curpgeLabel.config(text = self.worklistpos)
+
+   def setworklistsizedisplay(self):
+      self.curpgeLabel.config(text = str(len(self.worklist)))
 
    def config_save(self):
       self.config.setsourcedir(self.srcdir)
@@ -229,7 +248,7 @@ class window(tk.Tk):
       self.after(500,self.check)
 
    def run(self):
-      self.observer_restart()
+      self.observer_start()
       self.winvarcreate() #all the window variables
       self.config_get()
       self.wincreate()
@@ -277,15 +296,14 @@ class window(tk.Tk):
       if len(self.destnamevar.get()) > 0:
          self.setdestfilename()
 
-   def observer_restart(self):
-      if self.observer != None:
-         self.observer_end()
+   def observer_start(self):
       self.observer = watchdog.observers.Observer()
       event_handler = eventhandle()
       event_handler.setqueue(self.work)
       self.observer.schedule(event_handler, self.srcdir, recursive = False)
       self.observer.start()
 
+       #called to stop observer when exiting
    def observer_end(self):
       self.observer.stop()
       self.observer.join()
@@ -417,16 +435,19 @@ class window(tk.Tk):
          self.destnamevar.set(self.destfilename)
 
 
+   def loadworkfile(): #eventually use selected index in array
+         self.srcnamevar.set(os.path.basename(self.name))
+         self.pdfp.setfile(self.name)
+         self.setdestfilename()
+
    def getworkthread(self):
       while True:
-         self.nowork = True
+         self.nowork = True      #variable is first initialized here
          self.name = self.work.get()
          if self.endqueue:
             break
          self.nowork = False
-         self.srcnamevar.set(os.path.basename(self.name))
-         self.pdfp.setfile(self.name)
-         self.setdestfilename()
+         self.loadworkfile()
 #TODO: Here is where we guess what the destdir is
             #wait until file processed
          self.filedone.wait()
@@ -694,6 +715,7 @@ class eventhandle(watchdog.events.FileSystemEventHandler):
    def setqueue(self, queue):
       self.work = queue
 
+     #when a desired file is moved, put it on the work queue
    def on_moved(self, event):
           #this is the move after the browser finishes download
       dest = event.dest_path
