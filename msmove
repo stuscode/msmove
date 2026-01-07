@@ -69,7 +69,6 @@ class window(tk.Tk):
 #self.grid_columnconfigure(tuple(range(6)), weight=1)
       self.grid_columnconfigure(1, weight=1)
       self.grid_rowconfigure(0, weight=1)
-      self.filedone = threading.Event()
 
       self.pdfp = pdfpreview(self)
       self.pdfp.grid(row=row,column=0,columnspan=5,sticky='nsew')
@@ -353,7 +352,6 @@ class window(tk.Tk):
       self.clearfile()
 
    def moveitthread(self, src, dst):
-      print('move ',src,' ', dst)
       shutil.move(src, dst)
 
    def domove(self):
@@ -459,7 +457,7 @@ class window(tk.Tk):
       self.pdfp.clear()
       self.setdestfilename() #reset from pattern
            #get next file or wait
-      self.filedone.set()
+      self.loadworkfile()
 
    def loadworkfile(self): #eventually use selected index in array
          f = self.currentwork()
@@ -475,14 +473,12 @@ class window(tk.Tk):
          ans = messagebox.askyesno(title='Exit with work', message = 'Work remains, really exit?')
          if ans == False:
             return
-      self.filedone.set() #make sure we don't get hung up here
       self.endqueue = True
       self.observer_end()
 #only from version 3.13   self.work.shutdown(immediate=True)
       self.destroy()
 
    def finishwin(self):
-      self.filedone.set() #make sure we don't get hung up here
       self.destroy()
 
    def finishup(self):
@@ -492,7 +488,6 @@ class window(tk.Tk):
 
    def destroywin(self):
       self.finishup()
-      self.filedone.set() #make sure we don't get hung up here
       self.destroy()
 
    def guessbest(self):
@@ -522,8 +517,9 @@ class pdfpreview(Frame):
       self.canvas['yscrollcommand'] = self.vscroll.set
       self.vscroll.grid(row=0,column=1,sticky='ns')
       self.clear()
-      self.canvas.bind_all("<Button-4>", lambda event: self.canvas.yview_scroll(-1, "units"))
-      self.canvas.bind_all("<Button-5>", lambda event: self.canvas.yview_scroll(1, "units"))
+      self.canvas.bind("<MouseWheel>", on_mousewheel)
+      self.canvas.bind("<Button-4>", lambda event: self.canvas.yview_scroll(-1, "units"))
+      self.canvas.bind("<Button-5>", lambda event: self.canvas.yview_scroll(1, "units"))
       self.canvas.bind("<Configure>", self.resize_canvas)
 
    def clear(self):
@@ -586,6 +582,7 @@ class dirlistpanel(Frame):
       self.list['yscrollcommand'] = self.vscroll.set
       self.vscroll.grid(row=0,column=1,sticky='ns')
       self.list.bind('<<ListboxSelect>>', self.userselect)
+      self.list.bind("<MouseWheel>", on_mousewheel)
 
    def settopdir(self, topdir):
       self.topdir = topdir
@@ -597,11 +594,11 @@ class dirlistpanel(Frame):
    def getsubdirs(self):
       subfolders = []
       if os.path.isdir(self.topdir):
-#         for root, dirs, files in os.walk(self.topdir):
-#            for d in dirs:
-#               subfolders.append(os.path.join(root,d))
-         subfolders = [ f for f in os.scandir(self.topdir) if f.is_dir() and not f.name.startswith('.') ]
-         self.sortedsubfolders = sorted(subfolders, key=lambda s: s.name.lower())
+         for root, dirs, files in os.walk(self.topdir):
+            for d in dirs:
+               subfolders.append(os.path.join(root,d))
+#old way: subfolders = [ f for f in os.scandir(self.topdir) if f.is_dir() and not f.name.startswith('.') ]
+         self.sortedsubfolders = sorted(subfolders, key=lambda s: s.lower())
       else:
          self.sortedsubfolders = []
 
@@ -613,11 +610,12 @@ class dirlistpanel(Frame):
       self.displaylist = []
       self.list.delete(0, tk.END)
       showless = self.select_cb.showlessvar.get()
+      topdirlen = len(self.select_cb.destdirtree) + 1
       for d in self.sortedsubfolders:
          (newname, pattern, lessused) = self.getinfo(d)
          if showless == 1 or lessused == 0:
-            self.displaylist.append(d.name)
-            self.dirlist.append(d.name)
+            self.displaylist.append(d[topdirlen:])
+            self.dirlist.append(d)
       self.listvar.set(self.displaylist)
       self.list.select_set(0)  #as if first row selected
       self.selectrow(0) #set up variables
@@ -891,6 +889,23 @@ class configfile():
       self.writeconfig()
    def getshowless(self):
       return self.confdat['program']['showless']
+
+def on_mousewheel(event):
+   # Determine which widget is currently under the mouse
+   target_widget = event.widget
+   # Scroll the specific widget
+   if target_widget.winfo_class() == 'Canvas':
+      # For Windows/macOS, event.delta gives a value (e.g., 120 or -120)
+      # For X11, event.num can be 4 or 5
+      if event.num == 4:
+         # Scroll up for X11 systems
+         target_widget.yview_scroll(-1, "units")
+      elif event.num == 5:
+         # Scroll down for X11 systems
+         target_widget.yview_scroll(1, "units")
+      else:
+         # For Windows/macOS
+         target_widget.yview_scroll(int(-1*(event.delta/120)), "units")
 
 def arguments(config):
    p = argparse.ArgumentParser(description="move monthly statements")
