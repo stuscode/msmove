@@ -3,7 +3,6 @@
 import argparse
 import base64
 from calendar import month_name
-#import copy
 import datetime
 import fitz
 import os
@@ -43,13 +42,13 @@ class window(tk.Tk):
       photo = PIL.ImageTk.PhotoImage(ico)
 
       self.wm_iconphoto(False, photo)
-      self.work = workqueue  #queue to move files from callback to worklist
-      self.worklist = [1,2]     #list of files that we are working with
+#self.work = workqueue  #queue to move files from callback to worklist
+      self.worklock = threading.Lock()
+      self.worklist = []     #list of files that we are working with
       self.worklistpos = 0  #starts from 1 index in worklist
       self.srcdir = srcdir
       self.destdirtree = destdirtree
       self.endqueue = False
-      self.name = ''
       self.config = config
       self.pattnamevar = tk.StringVar()
       self.protocol("WM_DELETE_WINDOW", self.unified_termination);
@@ -208,29 +207,56 @@ class window(tk.Tk):
       self.dirlist=dirlistpanel(self, self.config)
       self.dirlist.grid(row=row,column=0,columnspan=5,sticky='nsew')
 
+#worklist routines.  TODO: make a class for this.
    def addtoworklist(self, n):
-      self.worklist.append(n)
-      self.setworklistsizedisplay()
+      with self.worklock: #possible contention in onmove event
+         self.worklist.append(n)
+         if self.worklistpos == 0:
+            self.worklistpos = 1  #from empty to one entry
+            self.setworklistposdisplay()
+            self.loadworkfile()
+         self.setworklistsizedisplay()
 
-   def delfromworklist(self,pos):
-      del self.worklist[pos-1]  #position is index plus 1
-      self.setworklistsizedisplay()
+   def delcurfromworklist(self):
+      with self.worklock: #possible contention in onmove event
+         del self.worklist[self.worklistpos-1]  #position is index plus 1
+         if self.worklistpos > len(self.worklist):
+            self.worklistpos = self.worklistpos - 1
+            self.setworklistposdisplay()
+         self.setworklistsizedisplay()
 
    def pageminus(self):
       if self.worklistpos > 1:
          self.worklistpos = self.worklistpos - 1
          self.setworklistposdisplay()
+         self.loadworkfile()
 
    def pageplus(self):
       if self.worklistpos < len(self.worklist):
          self.worklistpos = self.worklistpos + 1
          self.setworklistposdisplay()
+         self.loadworkfile()
 
    def setworklistposdisplay(self):
       self.curpgeLabel.config(text = self.worklistpos)
 
    def setworklistsizedisplay(self):
-      self.curpgeLabel.config(text = str(len(self.worklist)))
+      self.curtotLabel.config(text = str(len(self.worklist)))
+
+   def currentwork(self):
+      if self.worklistpos > 0:
+         return self.worklist[self.worklistpos - 1]
+      else:
+         return ''
+
+   def ismorework(self):
+      if self.worklistpos > 0:
+         return True
+      else:
+         return False
+
+#end of worklist routines
+
 
    def config_save(self):
       self.config.setsourcedir(self.srcdir)
@@ -253,9 +279,6 @@ class window(tk.Tk):
       self.config_get()
       self.wincreate()
       self.setdirlist()
-      self.workget = threading.Thread(target=self.getworkthread)
-      self.workget.daemon=True #instead of queue.shutdown
-      self.workget.start()
       self.lift() #maybe
       self.attributes('-topmost', True) #maybe
       self.check()
@@ -299,7 +322,7 @@ class window(tk.Tk):
    def observer_start(self):
       self.observer = watchdog.observers.Observer()
       event_handler = eventhandle()
-      event_handler.setqueue(self.work)
+      event_handler.setclass(self)
       self.observer.schedule(event_handler, self.srcdir, recursive = False)
       self.observer.start()
 
@@ -321,14 +344,13 @@ class window(tk.Tk):
          self.dstdirdis.config(text=newdir)
          self.dirlist.settopdir(newdir)
 
+#Button controls for source file.  Delete, Move, Skip
+
    def dontdoit(self):
            #get next file or wait
       #print("dont")
          #clear source
-      self.srcnamevar.set("")
-      self.pdfp.clear()
-      self.setdestfilename() #reset from pattern
-      self.filedone.set()
+      self.clearfile()
 
    def moveitthread(self, src, dst):
       print('move ',src,' ', dst)
@@ -338,22 +360,17 @@ class window(tk.Tk):
          #get dest dir
          #dest = self.dirlist.getselecteddir()
          #set dest name
-         #execute copy from self.name to destdir/destname
-      t = threading.Thread(target=self.moveitthread, args=(self.name, self.destnamevar.get()))
+         #execute copy from current name to destdir/destname
+      t = threading.Thread(target=self.moveitthread, args=(self.currentwork(), self.destnamevar.get()))
       t.start()
-      #print("process ",self.destnamevar.get(), ' ', self.name)
+      #print("process ",self.destnamevar.get(), ' ', self.currentwork())
          #clear source
-      self.srcnamevar.set("")
-      self.pdfp.clear()
-      self.setdestfilename() #reset from pattern
-           #get next file or wait
-      self.filedone.set()
+      self.clearfile()
 
-#called when delete button hit.  Delete the file.
    def delete(self): 
       ans = messagebox.askyesno(title='Confirm Delete', message = 'Really Delete?')
       if ans == True:
-         pathlib.Path.unlink(self.name)
+         pathlib.Path.unlink(self.currentwork())
          self.dontdoit()
 
 #called when move button hit
@@ -367,6 +384,8 @@ class window(tk.Tk):
              #create warning, and check if we want to overwrite
       else:
          self.domove()
+
+#END of Button controls
       
 
 #TODO: fix this so that it doesn't reset the displayed selected directory
@@ -434,35 +453,25 @@ class window(tk.Tk):
          self.destfilename = ''
          self.destnamevar.set(self.destfilename)
 
+   def clearfile(self):
+      self.srcnamevar.set("")
+      self.delcurfromworklist()
+      self.pdfp.clear()
+      self.setdestfilename() #reset from pattern
+           #get next file or wait
+      self.filedone.set()
 
-   def loadworkfile(): #eventually use selected index in array
-         self.srcnamevar.set(os.path.basename(self.name))
-         self.pdfp.setfile(self.name)
+   def loadworkfile(self): #eventually use selected index in array
+         f = self.currentwork()
+         self.srcnamevar.set(os.path.basename(f))
+         self.pdfp.setfile(f)
          self.setdestfilename()
-
-   def getworkthread(self):
-      while True:
-         self.nowork = True      #variable is first initialized here
-         self.name = self.work.get()
-         if self.endqueue:
-            break
-         self.nowork = False
-         self.loadworkfile()
-#TODO: Here is where we guess what the destdir is
-            #wait until file processed
-         self.filedone.wait()
-         self.filedone.clear()
-         print(self.endqueue)
-
-#TODO use self.renamepattern to set destination name
-         if not self.endqueue:
-            self.lift() #maybe
-            self.attributes('-topmost', True) #maybe
 
    def unified_termination(self):
 #if one wants to ask if they are sure about exiting, then 
 #checking self.work.empty() and also whether we are displaying a file
-      if self.work.empty() == False or self.nowork == False:
+#TODO: Change to check that worklist is empty
+      if self.ismorework() == True:
          ans = messagebox.askyesno(title='Exit with work', message = 'Work remains, really exit?')
          if ans == False:
             return
@@ -532,16 +541,8 @@ class pdfpreview(Frame):
          self.pageimages.append(PIL.Image.open(io.BytesIO(pix.pil_tobytes('ppm'))))
       self.images = [] #clear this
       self.setpages(self.canvas.winfo_width(), self.canvas.winfo_height())
-#self.setpages()
-#      print(self.winfo_width())
-#      print(self.winfo_height())
-#      print(self.canvas.__getitem__('width'))
-#      print(self.canvas.__getitem__('height'))
-#int(canvas.__getitem__('width'))
 
    def setpages(self, w, h):
-#      w = self.winfo_width()
-#      h = self.winfo_height()
       ypos = 0
       self.pages=[]
       for im1 in self.pageimages:
@@ -594,7 +595,11 @@ class dirlistpanel(Frame):
       self.select_cb.setpatterndisplay()
 
    def getsubdirs(self):
+      subfolders = []
       if os.path.isdir(self.topdir):
+#         for root, dirs, files in os.walk(self.topdir):
+#            for d in dirs:
+#               subfolders.append(os.path.join(root,d))
          subfolders = [ f for f in os.scandir(self.topdir) if f.is_dir() and not f.name.startswith('.') ]
          self.sortedsubfolders = sorted(subfolders, key=lambda s: s.name.lower())
       else:
@@ -712,8 +717,8 @@ class destdir():
 
 class eventhandle(watchdog.events.FileSystemEventHandler):
    work = None
-   def setqueue(self, queue):
-      self.work = queue
+   def setclass(self, c):
+      self.ourclass = c
 
      #when a desired file is moved, put it on the work queue
    def on_moved(self, event):
@@ -722,7 +727,8 @@ class eventhandle(watchdog.events.FileSystemEventHandler):
       lowerdest = dest.lower()
       for ext in INTERESTINGEXTENSIONS:
          if lowerdest.endswith(ext):
-            self.work.put(dest)
+#            self.work.put(dest)
+            self.ourclass.addtoworklist(dest)
             break
 
 class sighandle():
