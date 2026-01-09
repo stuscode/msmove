@@ -339,6 +339,7 @@ class window(tk.Tk):
    def picdstdir(self):
       newdir = filedialog.askdirectory()
       if len(newdir) > 0:
+         self.destdirtree = newdir
          self.config.setdestdir(newdir)
          self.dstdirdis.config(text=newdir)
          self.dirlist.settopdir(newdir)
@@ -958,6 +959,11 @@ if __name__ == '__main__':
    work = queue.Queue()
    sig = sighandle()
    signal.signal(signal.SIGINT, sig.sigint_handler)
+   print(srcdir, destdirtree)
+   if len(srcdir) == 0:
+      print('srcdir')
+   if len(destdirtree) == 0:
+      print('destdirtree')
    win = window(work,srcdir,destdirtree, config)
    sig.setwin(win)
    win.run()
