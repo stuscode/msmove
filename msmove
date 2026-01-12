@@ -139,12 +139,18 @@ class window(tk.Tk):
       self.forcelabel = Label(self, text="force date:")
       self.forcelabel.grid(row=row, column= 0)
 #TODO: look at calendar.dateentry to replace or add to these
-      self.forcemonth = monthsel(self)
-      self.forcemonth.grid(row=row, column = 1)
+      forceframe = ttk.Frame(self)
+      self.flbutton2 = ttk.Button(forceframe, style='Left2.TButton',text='', command=self.forceprev)
+      self.frbutton2 = ttk.Button(forceframe, style='Right2.TButton',text='', command=self.forcenext)
+      self.flbutton2.grid(row=1,column=1)
+      self.frbutton2.grid(row=1,column=4)
+      self.forcemonth = monthsel(forceframe)
+      self.forcemonth.grid(row=1, column = 2)
       self.forcemonth.bind('<<ComboboxSelected>>', self.forcedate)
-      self.forceyear = yearsel(self)
-      self.forceyear.grid(row=row, column = 2)
+      self.forceyear = yearsel(forceframe)
+      self.forceyear.grid(row=1, column = 3)
       self.forceyear.bind('<KeyRelease>', self.forcedate)
+      forceframe.grid(row=row, column=2)
       self.forceckbox = ttk.Checkbutton(self, text='Use this as date', variable=self.forceckboxvar, command=self.forcedate)
       self.forceckbox.state(['!selected'])
       self.forceckbox.grid(row=row, column=3, columnspan=2)
@@ -420,6 +426,13 @@ class window(tk.Tk):
       self = args[0]
       self.setdestfilename()
 
+   def forcenext(self):
+      if self.forcemonth.next():
+         self.forceyear.next()
+
+   def forceprev(self):
+      if self.forcemonth.prev():
+         self.forceyear.prev()
 
 #TODO: carry filename extension (.pdf usually)
     #entry to update of name that won't pull the selected pattern. for edits.
@@ -497,15 +510,43 @@ class window(tk.Tk):
 
 class monthsel(ttk.Combobox):
    def __init__(self, s):
-      super().__init__(s,width=8)
+      super().__init__(s,width=8, height=12)
       self['values'] = [month_name[m][0:3]+' ('+str(m)+')' for m in range(1, 13)]
       self.current(newindex=datetime.datetime.now().month-1)
+   def prev(self):
+      m = self.current()
+      if m == 0:
+         m = 11
+         self.current(newindex=m)
+         return True
+      else:
+         m = m - 1
+         self.current(newindex=m)
+         return False
+   def next(self):
+      m = self.current()
+      if m == 11:
+         m = 0
+         self.current(newindex=m)
+         return True
+      else:
+         m = m + 1
+         self.current(newindex=m)
+         return False
 
 class yearsel(Entry):
    def __init__(self, s):
       self.yearvar = tk.StringVar()
       super().__init__(s,textvar = self.yearvar, width=6)
       self.yearvar.set(str(datetime.datetime.now().year))
+   def prev(self):
+      y = int(self.yearvar.get())
+      y = y - 1
+      self.yearvar.set(str(y))
+   def next(self):
+      y = int(self.yearvar.get())
+      y = y + 1
+      self.yearvar.set(str(y))
 
 class pdfpreview(Frame):
    def __init__(self, c):
