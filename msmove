@@ -431,10 +431,12 @@ class window(tk.Tk):
    def forcenext(self):
       if self.forcemonth.next():
          self.forceyear.next()
+      self.setdestfilename()
 
    def forceprev(self):
       if self.forcemonth.prev():
          self.forceyear.prev()
+      self.setdestfilename()
 
 #TODO: carry filename extension (.pdf usually)
     #entry to update of name that won't pull the selected pattern. for edits.
