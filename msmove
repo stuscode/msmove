@@ -30,12 +30,38 @@ DEFAULTRENAME='statement_%Y%m'
 INTERESTINGEXTENSIONS=('pdf','ps')
 #from PIL import Image, ImageTk
 
+def setarrowstyle():
+   style = ttk.Style()
+   style.layout(
+      'Left2.TButton',[
+          ('Button.focus', {'children': [
+              ('Button.leftarrow', None),
+              ('Button.padding', {'sticky': 'nswe', 'children': [
+                  ('Button.label', {'sticky': 'nswe'}
+                   )]}
+               )]}
+           )]
+      )
+   style.layout(
+      'Right2.TButton',[
+          ('Button.focus', {'children': [
+              ('Button.rightarrow', None),
+              ('Button.padding', {'sticky': 'nswe', 'children': [
+                  ('Button.label', {'sticky': 'nswe'}
+                   )]}
+               )]}
+           )]
+      )
+   style.configure('Left2.TButton',font=('','8','bold'), width=1, arrowcolor='black')
+   style.configure('Right2.TButton',font=('','8','bold'), width=1, arrowcolor='black')
+   return style
  
 class window(tk.Tk):
    def __init__(self, workqueue, srcdir, destdirtree, config):
       super().__init__()
 #      ico = PIL.Image.open('file-move-icon.png')
 #      photo = PIL.ImageTk.PhotoImage(ico)
+      self.style = setarrowstyle()
       data = base64.b64decode(icon64)
       buf = io.BytesIO(data)
       ico = PIL.Image.open(buf)
@@ -56,6 +82,7 @@ class window(tk.Tk):
    def winvarcreate(self):
       self.srcnamevar = tk.StringVar()
       self.destnamevar = tk.StringVar()
+      self.forceautockboxvar = IntVar()
       self.forceckboxvar = IntVar()
       self.autoselvar = IntVar()
       self.showlessvar = IntVar()
@@ -83,30 +110,6 @@ class window(tk.Tk):
 
 #Page control frame
       pgcontframe = ttk.Frame(self)
-      style = ttk.Style()
-      style.layout(
-            'Left2.TButton',[
-                ('Button.focus', {'children': [
-                    ('Button.leftarrow', None),
-                    ('Button.padding', {'sticky': 'nswe', 'children': [
-                        ('Button.label', {'sticky': 'nswe'}
-                         )]}
-                     )]}
-                 )]
-            )
-      style.layout(
-            'Right2.TButton',[
-                ('Button.focus', {'children': [
-                    ('Button.rightarrow', None),
-                    ('Button.padding', {'sticky': 'nswe', 'children': [
-                        ('Button.label', {'sticky': 'nswe'}
-                         )]}
-                     )]}
-                 )]
-            )
-
-      style.configure('Left2.TButton',font=('','8','bold'), width=1, arrowcolor='black',command=self.pageminus)
-      style.configure('Right2.TButton',font=('','8','bold'), width=1, arrowcolor='black',command=self.pageplus)
       self.lbutton2 = ttk.Button(pgcontframe, style='Left2.TButton',text='', command=self.pageminus)
       self.rbutton2 = ttk.Button(pgcontframe, style='Right2.TButton',text='', command=self.pageplus)
       self.lbutton2.grid(row=1,column=1)
@@ -150,7 +153,10 @@ class window(tk.Tk):
       self.forceyear = yearsel(forceframe)
       self.forceyear.grid(row=1, column = 3)
       self.forceyear.bind('<KeyRelease>', self.forcedate)
-      forceframe.grid(row=row, column=2)
+      forceframe.grid(row=row, column=1)
+      self.forceautockbox = ttk.Checkbutton(self, text='Autoincrement', variable=self.forceautockboxvar)
+      self.forceautockbox.state(['!selected'])
+      self.forceautockbox.grid(row=row, column=2)
       self.forceckbox = ttk.Checkbutton(self, text='Use this as date', variable=self.forceckboxvar, command=self.forcedate)
       self.forceckbox.state(['!selected'])
       self.forceckbox.grid(row=row, column=3, columnspan=2)
@@ -186,7 +192,7 @@ class window(tk.Tk):
       row = row + 1
       self.showless = ttk.Checkbutton(self,text='Show less used', variable = self.showlessvar, command=self.showlessused)
       self.showless.grid(row=row, column=1,columnspan=2, sticky='w')
-      self.isless = ttk.Checkbutton(self,text='Entry is less used', variable= self.islessvar, command=self.lessusedclick)
+      self.isless = ttk.Checkbutton(self,text='Entry is less used', variable= self.islessvar)
       self.isless.state(['!selected'])
       self.isless.grid(row=row, column=3,columnspan=2, sticky='w')
       row = row + 1
@@ -296,6 +302,7 @@ class window(tk.Tk):
    def usermodidpat(self):
       #save id pattern back to file and update dest name and scores
       self.updatepatternfromuser()
+      self.dirlist.setselectedlessused(self.islessvar.get())
       self.config.writeconfig()
 #      self.setdestfilename()
 #      if self.showlessvar.get() == 0:
@@ -308,14 +315,6 @@ class window(tk.Tk):
 
    def toggleauto(self):
       print('auto')
-
-   def lessusedclick(self):
-#      d = self.dirlist.getselecteddir()
-      self.dirlist.setselectedlessused(self.islessvar.get())
-#self.updatepatternfromuser() #TODO maybe make this more targeted
-#TODO; set config entry and redraw the list if this was  undone
-#      if self.showlessvar.get() == 0: 
-#         self.dirlist.displaytopdir()  #disappear the now less used dir
 
    def setdirlist(self):
       self.dirlist.settopdir(self.destdirtree)
@@ -371,6 +370,9 @@ class window(tk.Tk):
       #print("process ",self.destnamevar.get(), ' ', self.currentwork())
          #clear source
       self.clearfile()
+      if self.forceckboxvar.get() == 1:
+         if self.forceautockboxvar.get() == 1:
+            self.forcenext()
 
    def delete(self): 
       ans = messagebox.askyesno(title='Confirm Delete', message = 'Really Delete?')
@@ -533,6 +535,8 @@ class monthsel(ttk.Combobox):
          m = m + 1
          self.current(newindex=m)
          return False
+   def get():
+      return self.current() + 1
 
 class yearsel(Entry):
    def __init__(self, s):
@@ -610,6 +614,7 @@ class pdfpreview(Frame):
    def resize_canvas(self, e):
       self.setpages(e.width-2, e.height-2) #-2 for border
 
+#TODO: Fix redisplay when making changes and saves.
 class dirlistpanel(Frame):
    def __init__(self, c, config):
       super().__init__(c)
@@ -625,6 +630,7 @@ class dirlistpanel(Frame):
       self.vscroll.grid(row=0,column=1,sticky='ns')
       self.list.bind('<<ListboxSelect>>', self.userselect)
       self.list.bind("<MouseWheel>", on_mousewheel)
+      self.selitem='' #from displaylist
 
    def settopdir(self, topdir):
       self.topdir = topdir
@@ -648,6 +654,7 @@ class dirlistpanel(Frame):
 #dirlist[] maintains working data of diretory
 #config is where long term storage happens... or is this the working storage?
    def displaytopdir(self):
+      print('selitem = ', self.selitem)
       self.dirlist=[]
       self.displaylist = []
       self.list.delete(0, tk.END)
@@ -659,15 +666,28 @@ class dirlistpanel(Frame):
             self.displaylist.append(d[topdirlen:])
             self.dirlist.append(d)
       self.listvar.set(self.displaylist)
-      self.list.select_set(0)  #as if first row selected
-      self.selectrow(0) #set up variables
-#get info for directories
+      selrow = self.getselrow()
+#      if self.selrow >= len(self.displaylist):
+#         self.selrow = len(self.displaylist) - 1
+      self.list.select_set(selrow)  #as if first row selected
+      self.list.see(selrow)
+      self.selectrow(selrow) #set up variables
+      self.selitem = self.getselecteditem() #reset which is selected
 
          #we are setting a row programmatically
+   def getselrow(self):
+      i = 0
+      for d in self.displaylist:
+         if d >= self.selitem:
+            return i
+         i = i + 1
+      return i - 1
+
    def selectrow(self, row):  #row 0 based
       if row < len(self.dirlist):
          full = os.path.join(self.topdir, self.dirlist[row])
          self.select_cb.setdestfilename()
+         self.select_cb.setpatterndisplay() #TODO: Consolidate 2 lines
 #self.select_cb.userdirselection(self.dirlist[row].idpattern,self.dirlist[row].renamepattern)
 
 #TODO fix getting info from existing
@@ -681,13 +701,18 @@ class dirlistpanel(Frame):
 #TODO: if one of the patterns was changed but not saved ask user if sure
       s = self.list.curselection()
       if len(s) == 1:
-         self.selectrow(s[0])
+         srow = s[0]
+         self.selitem = self.displaylist[srow]
+         self.selectrow(srow)
       self.select_cb.setpatterndisplay()
+
+   def getselecteditem(self):
+      row = self.list.curselection()[0] #single select mode, and we always have something selected.
+      return self.displaylist[row]
 
    def getselecteddir(self):
       row = self.list.curselection()[0] #single select mode, and we always have something selected.
       full = os.path.join(self.topdir, self.dirlist[row])
-#      full = self.dirlist[row].path
       return full
 
    def getselectedidpat(self):
@@ -745,16 +770,9 @@ class dirlistpanel(Frame):
          self.config.setdirlu(full, lessused)
 #self.select_cb.config.setdirlu(self.getselecteddir(), lessused)
          showless = self.select_cb.showlessvar.get()
-         if showless == 0:  #redisplay if this one gets undisplayed
+         if showless == 0 and lessused == 1:  #redisplay if this one gets undisplayed
             self.displaytopdir()
       
-class destdir():
-   def __init__(self, path, idpattern, newname, lessused):
-      self.path = path
-      self.idpattern = idpattern
-      self.renamepattern = newname
-      self.lessused = lessused
-
 class eventhandle(watchdog.events.FileSystemEventHandler):
    work = None
    def setclass(self, c):
