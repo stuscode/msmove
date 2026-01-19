@@ -57,10 +57,11 @@ def setarrowstyle():
    return style
  
 class window(tk.Tk):
-   def __init__(self, workqueue, srcdir, destdirtree, config):
+   def __init__(self, srcdir, destdirtree, config):
       super().__init__()
 #      ico = PIL.Image.open('file-move-icon.png')
 #      photo = PIL.ImageTk.PhotoImage(ico)
+      self.winvarcreate() #all the window variables
       self.style = setarrowstyle()
       data = base64.b64decode(icon64)
       buf = io.BytesIO(data)
@@ -68,18 +69,10 @@ class window(tk.Tk):
       photo = PIL.ImageTk.PhotoImage(ico)
 
       self.wm_iconphoto(False, photo)
-#self.work = workqueue  #queue to move files from callback to worklist
-      self.worklock = threading.Lock()
-      self.worklist = []     #list of files that we are working with
-      self.worklistpos = 0  #starts from 1 index in worklist
-      self.srcdir = srcdir
-      self.destdirtree = destdirtree
-      self.endqueue = False
-      self.config = config
-      self.pattnamevar = tk.StringVar()
       self.protocol("WM_DELETE_WINDOW", self.unified_termination);
 
    def winvarcreate(self):
+      self.pattnamevar = tk.StringVar()
       self.srcnamevar = tk.StringVar()
       self.destnamevar = tk.StringVar()
       self.forceautockboxvar = IntVar()
@@ -88,6 +81,14 @@ class window(tk.Tk):
       self.showlessvar = IntVar()
       self.islessvar = IntVar()
       self.idpattnamevar = tk.StringVar()
+      self.worklist = worklist()
+##      self.worklock = threading.Lock()
+##      self.worklist = []     #list of files that we are working with
+##      self.worklistpos = 0  #starts from 1 index in worklist
+      self.srcdir = srcdir
+      self.destdirtree = destdirtree
+      self.endqueue = False
+      self.config = config
 
    def wincreate(self):
       self.geometry("900x1000")
@@ -211,7 +212,7 @@ class window(tk.Tk):
       self.pattname = Entry(self, width=45, textvar=self.pattnamevar)
       self.pattname.bind('<KeyRelease>', self.forcedate)
       self.pattname.grid(row=row, column=1, columnspan=4, sticky=W)
-      self.pattbutton = Button(self, text="Save",width=4,command=self.usermodidpat)
+      self.pattbutton = Button(self, text="Save",width=4,command=self.savedirinfo)
       self.pattbutton.grid(row=row,column=4)
       row = row + 1
 #      self.grid_rowconfigure(row,weight=1)
@@ -220,73 +221,76 @@ class window(tk.Tk):
 
 #worklist routines.  TODO: make a class for this.
    def addtoworklist(self, n):
-      with self.worklock: #possible contention in onmove event
-         self.worklist.append(n)
-         if self.worklistpos == 0:
-            self.worklistpos = 1  #from empty to one entry
-            self.setworklistposdisplay()
-            self.loadworkfile()
-         self.setworklistsizedisplay()
+##      with self.worklock: #possible contention in onmove event
+##         self.worklist.append(n)
+##         if self.worklistpos == 0:
+##            self.worklistpos = 1  #from empty to one entry
+      if self.worklist.add(n):
+         self.setworklistposdisplay()
+         self.loadworkfile()
+      self.setworklistsizedisplay()
 
    def delcurfromworklist(self):
-      with self.worklock: #possible contention in onmove event
-         del self.worklist[self.worklistpos-1]  #position is index plus 1
-         if self.worklistpos > len(self.worklist):
-            self.worklistpos = self.worklistpos - 1
-            self.setworklistposdisplay()
-         self.setworklistsizedisplay()
+##      with self.worklock: #possible contention in onmove event
+##         del self.worklist[self.worklistpos-1]  #position is index plus 1
+##         if self.worklistpos > len(self.worklist):
+##            self.worklistpos = self.worklistpos - 1
+      if self.worklist.deletecurrent():
+         self.setworklistposdisplay()
+         self.loadworkfile()
+      self.setworklistsizedisplay()
 
    def pageminus(self):
-      if self.worklistpos > 1:
-         self.worklistpos = self.worklistpos - 1
+##      if self.worklistpos > 1:
+##         self.worklistpos = self.worklistpos - 1
+      if self.worklist.prevloc():
          self.setworklistposdisplay()
          self.loadworkfile()
 
    def pageplus(self):
-      if self.worklistpos < len(self.worklist):
-         self.worklistpos = self.worklistpos + 1
+##      if self.worklistpos < len(self.worklist):
+##         self.worklistpos = self.worklistpos + 1
+      if self.worklist.nextloc():
          self.setworklistposdisplay()
          self.loadworkfile()
 
    def setworklistposdisplay(self):
-      self.curpgeLabel.config(text = self.worklistpos)
+      self.curpgeLabel.config(text = self.worklist.pos())
 
    def setworklistsizedisplay(self):
-      self.curtotLabel.config(text = str(len(self.worklist)))
+      self.curtotLabel.config(text = self.worklist.size())
 
-   def currentwork(self):
-      if self.worklistpos > 0:
-         return self.worklist[self.worklistpos - 1]
-      else:
-         return ''
+##   def currentwork(self):
+##      if self.worklistpos > 0:
+##         return self.worklist[self.worklistpos - 1]
+##      else:
+##         return ''
 
-   def ismorework(self):
-      if self.worklistpos > 0:
-         return True
-      else:
-         return False
+##   def ismorework(self):
+##      if self.worklistpos > 0:
+##         return True
+##      else:
+##         return False
 
 #end of worklist routines
 
 
-   def config_save(self):
-      self.config.setsourcedir(self.srcdir)
-      self.config.setdestdir(self.destdirtree)
-      self.config.setshowless(self.showlessvar.get())
+###   def config_save(self):
+###      self.config.setsourcedir(self.srcdir)
+###      self.config.setdestdir(self.destdirtree)
+###      self.config.setshowless(self.showlessvar.get())
 
    def config_get(self):
       self.showlessvar.set(self.config.getshowless())
       self.srcdir = self.config.getsourcedir()
       self.destdirtree = self.config.getdestdir()
 
-
-      #This makes tk responsive to control-C from launching terminal
+      #This makes tk more responsive to control-C from launching terminal
    def check(self):
       self.after(500,self.check)
 
    def run(self):
       self.observer_start()
-      self.winvarcreate() #all the window variables
       self.config_get()
       self.wincreate()
       self.setdirlist()
@@ -299,20 +303,22 @@ class window(tk.Tk):
       #get source filename for prototype id
       self.idpattnamevar.set(self.srcnamevar.get())
 
-   def usermodidpat(self):
+#Save directory entry information idpat, renamepat, lessused
+   def savedirinfo(self):
       #save id pattern back to file and update dest name and scores
-      self.updatepatternfromuser()
-      self.dirlist.setselectedlessused(self.islessvar.get())
+      idpat = self.idpattnamevar.get()
+      self.dirlist.setselectedidpat(idpat)
+      modpat = self.pattnamevar.get()
+      self.dirlist.setselectedrenamepat(modpat)
+      lessused = self.islessvar.get()
+      self.dirlist.setselectedlessused(lessused)
       self.config.writeconfig()
-#      self.setdestfilename()
-#      if self.showlessvar.get() == 0:
-#         self.dirlist.displaytopdir()
-#TODO: save this to the data file
 
    def showlessused(self):
       self.dirlist.displaytopdir()
-      self.config_save()
+###      self.config_save()
 
+#TODO: set up auto selection of destination
    def toggleauto(self):
       print('auto')
 
@@ -365,9 +371,8 @@ class window(tk.Tk):
          #dest = self.dirlist.getselecteddir()
          #set dest name
          #execute copy from current name to destdir/destname
-      t = threading.Thread(target=self.moveitthread, args=(self.currentwork(), self.destnamevar.get()))
+      t = threading.Thread(target=self.moveitthread, args=(self.worklist.current(), self.destnamevar.get()))
       t.start()
-      #print("process ",self.destnamevar.get(), ' ', self.currentwork())
          #clear source
       self.clearfile()
       if self.forceckboxvar.get() == 1:
@@ -377,7 +382,7 @@ class window(tk.Tk):
    def delete(self): 
       ans = messagebox.askyesno(title='Confirm Delete', message = 'Really Delete?')
       if ans == True:
-         pathlib.Path.unlink(self.currentwork())
+         pathlib.Path.unlink(self.worklist.current())
          self.dontdoit()
 
 #called when move button hit
@@ -394,15 +399,6 @@ class window(tk.Tk):
 
 #END of Button controls
       
-
-#TODO: fix this so that it doesn't reset the displayed selected directory
-   def updatepatternfromuser(self):
-      idpat = self.idpattnamevar.get()
-      self.dirlist.setselectedidpat(idpat)
-      modpat = self.pattnamevar.get()
-      self.dirlist.setselectedrenamepat(modpat)
-      lessused = self.islessvar.get()
-      self.dirlist.setselectedlessused(lessused)
 
    def setpatterndisplay(self):
       idpat = self.dirlist.getselectedidpat()
@@ -478,7 +474,8 @@ class window(tk.Tk):
       self.loadworkfile()
 
    def loadworkfile(self): #eventually use selected index in array
-         f = self.currentwork()
+      if self.worklist.isempty() == False:
+         f = self.worklist.current()
          self.srcnamevar.set(os.path.basename(f))
          self.pdfp.setfile(f)
          self.setdestfilename()
@@ -487,7 +484,7 @@ class window(tk.Tk):
 #if one wants to ask if they are sure about exiting, then 
 #checking self.work.empty() and also whether we are displaying a file
 #TODO: Change to check that worklist is empty
-      if self.ismorework() == True:
+      if self.worklist.isempty() == False:
          ans = messagebox.askyesno(title='Exit with work', message = 'Work remains, really exit?')
          if ans == False:
             return
@@ -502,7 +499,6 @@ class window(tk.Tk):
    def finishup(self):
       self.endqueue = True
       self.observer_end()
-      work.put("")  #wake up the get so thread can exit
 
    def destroywin(self):
       self.finishup()
@@ -656,7 +652,6 @@ class dirlistpanel(Frame):
 #dirlist[] maintains working data of diretory
 #config is where long term storage happens... or is this the working storage?
    def displaytopdir(self):
-      print('selitem = ', self.selitem)
       self.dirlist=[]
       self.displaylist = []
       self.list.delete(0, tk.END)
@@ -774,6 +769,59 @@ class dirlistpanel(Frame):
          showless = self.select_cb.showlessvar.get()
          if showless == 0 and lessused == 1:  #redisplay if this one gets undisplayed
             self.displaytopdir()
+
+#manipulation routines return True if display should change
+class worklist():
+   wlist = []
+   position = 0
+   lock = threading.Lock()
+   
+   def add(self, entry):
+      with self.lock:
+         self.wlist.append(entry)
+         if self.position == 0:
+            self.position = 1
+            return True
+         else:
+            return False
+
+   def deletecurrent(self):
+      with self.lock:
+         del self.wlist[self.position-1]
+         if self.position > len(self.wlist):
+            self.position = len(self.wlist)
+         return True
+
+   def prevloc(self):
+      with self.lock:
+         if self.position > 1:
+            self.position = self.position - 1
+            return True
+         else:
+            return False
+
+   def nextloc(self):
+      with self.lock:
+         if self.position < len(self.wlist):
+            self.position = self.position + 1
+            return True
+         else:
+            return False
+
+   def isempty(self):
+      if self.position == 0:
+         return True
+      else:
+         return False
+
+   def pos(self):
+      return str(self.position)
+
+   def size(self):
+      return str(len(self.wlist))
+
+   def current(self):
+      return self.wlist[self.position - 1]
       
 class eventhandle(watchdog.events.FileSystemEventHandler):
    work = None
@@ -799,8 +847,6 @@ class sighandle():
 
    def sigint_handler(self, sig, frame):
       self.win.unified_termination()
-#      self.win.finishup()
-#      self.win.finishwin()
 
 #config file: ~/.config/msmove or if no .config, ~/.msmove
 #format: json
@@ -845,9 +891,9 @@ class configfile():
          self.confdat['program']['sourcedir'] = '~/Downloads'
          self.confdat['program']['destdir']='~/statements'
 #TODO These should reflect command line arguments
-      for r in self.confdat:
-         if 'lu' in r:
-            print(r['lu'])
+##      for r in self.confdat:
+##         if 'lu' in r:
+##            print(r['lu'])
    def writeconfig(self):
       of = self.configfile + '.orig'
       if not os.path.exists(of):
@@ -1017,15 +1063,9 @@ if __name__ == '__main__':
         #process command line arguments
    config = configfile()
    (srcdir, destdirtree) = arguments(config)
-   work = queue.Queue()
    sig = sighandle()
    signal.signal(signal.SIGINT, sig.sigint_handler)
-   print(srcdir, destdirtree)
-   if len(srcdir) == 0:
-      print('srcdir')
-   if len(destdirtree) == 0:
-      print('destdirtree')
-   win = window(work,srcdir,destdirtree, config)
+   win = window(srcdir,destdirtree, config)
    sig.setwin(win)
    win.run()
    win.finishup()
