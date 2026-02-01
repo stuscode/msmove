@@ -577,7 +577,7 @@ class pdfpreview(tk.Frame):
          im2 = im1.resize((nw,nh))
          buf = io.BytesIO()
          im2.save(buf, format='PPM')
-         self.pages.append(PhotoImage(data=buf.getvalue()))
+         self.pages.append(PIL.ImageTk.PhotoImage(data=buf.getvalue()))
          ypos = ypos + nh
       ypos = 0
       if len(self.images) > 0:
@@ -588,7 +588,7 @@ class pdfpreview(tk.Frame):
       else:
          for p in self.pages:
             ih = p.height()
-            self.images.append(self.canvas.create_image((0,ypos),anchor=NW,image=p))
+            self.images.append(self.canvas.create_image((0,ypos),anchor='nw',image=p))
             ypos = ypos + ih
       self.canvas.config(width=w,height=h,scrollregion=(0,0,w,ypos))
 
@@ -637,7 +637,7 @@ class dirlistpanel(tk.Frame):
 
 #TODO dirlist[] is set/cleared when directory changes not on redisplay
 #dirlist[] maintains working data of diretory
-#config is where long term storage happens... or is this the working storage?
+#config is where long term storage happens.
    def displaytopdir(self):
       self.dirlist=[]
       self.displaylist = []
