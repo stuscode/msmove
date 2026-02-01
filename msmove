@@ -5,31 +5,32 @@ import base64
 from calendar import month_name
 import datetime
 import fitz
-import os
 import io
+import os
 import pathlib
 import PIL.Image
 import PIL.ImageTk
 #from PIL import Image, ImageTk
+import shutil
 import signal
 import threading
 import time
 import tkinter as tk
-from tkinter import ttk
-#from tkinter import scrolledtext
+from tkinter import Button
+from tkinter import Entry
 from tkinter import filedialog
+from tkinter import Label
+from tkinter import Listbox
 from tkinter import messagebox
-from tkinter import *
-import queue
+from tkinter import ttk
 import watchdog.events
 import watchdog.observers
 import yaml
-import shutil
 
 DEFAULTRENAME='statement_%Y%m'
 INTERESTINGEXTENSIONS=('pdf','ps')
-#from PIL import Image, ImageTk
 
+#Create a style that allows big arrow buttons
 def setarrowstyle():
    style = ttk.Style()
    style.layout(
@@ -52,39 +53,60 @@ def setarrowstyle():
                )]}
            )]
       )
-   style.configure('Left2.TButton',font=('','8','bold'), width=1, arrowcolor='black')
-   style.configure('Right2.TButton',font=('','8','bold'), width=1, arrowcolor='black')
+   style.configure('Left2.TButton',font=('','8','bold'), 
+                   width=1, arrowcolor='black')
+   style.configure('Right2.TButton',font=('','8','bold'), 
+                   width=1, arrowcolor='black')
    return style
  
+#Main window, main part of program
 class window(tk.Tk):
    def __init__(self, srcdir, destdirtree, config):
       super().__init__()
 #      ico = PIL.Image.open('file-move-icon.png')
 #      photo = PIL.ImageTk.PhotoImage(ico)
-      self.winvarcreate() #all the window variables
+      self.winvarcreate(srcdir, destdirtree, config) #all the window variables
       self.style = setarrowstyle()
       data = base64.b64decode(icon64)
       buf = io.BytesIO(data)
       ico = PIL.Image.open(buf)
       photo = PIL.ImageTk.PhotoImage(ico)
-
       self.wm_iconphoto(False, photo)
       self.protocol("WM_DELETE_WINDOW", self.unified_termination);
 
-   def winvarcreate(self):
+   def winvarcreate(self, srcdir, destdirtree, config):
       self.pattnamevar = tk.StringVar()
       self.srcnamevar = tk.StringVar()
       self.destnamevar = tk.StringVar()
-      self.forceautockboxvar = IntVar()
-      self.forceckboxvar = IntVar()
-      self.autoselvar = IntVar()
-      self.showlessvar = IntVar()
-      self.islessvar = IntVar()
+      self.forceautockboxvar = tk.IntVar()
+      self.forceckboxvar = tk.IntVar()
+      self.autoselvar = tk.IntVar()
+      self.showlessvar = tk.IntVar()
+      self.islessvar = tk.IntVar()
       self.idpattnamevar = tk.StringVar()
       self.worklist = worklist()
       self.srcdir = srcdir
       self.destdirtree = destdirtree
       self.config = config
+
+      #This makes tk more responsive to ctrl-c from launching terminal
+   def check(self):
+      self.after(500,self.check)
+
+   def run(self):
+      self.observer_start()
+      self.config_get()
+      self.wincreate()
+      self.setdirlist()
+      self.attributes('-topmost', True) #maybe
+      self.check()
+      self.mainloop()
+
+   def config_get(self):
+      self.showlessvar.set(self.config.getshowless())
+      self.autoselvar.set(self.config.getautosel())
+      self.srcdir = self.config.getsourcedir()
+      self.destdirtree = self.config.getdestdir()
 
    def wincreate(self):
       self.geometry("900x1000")
@@ -100,14 +122,16 @@ class window(tk.Tk):
       self.sep1.grid(row=row, column=0, columnspan=5, sticky='ew')
       row = row + 1
       self.srclabel = Label(self, text="source:")
-      self.srclabel.grid(row=row, column= 0, sticky=E)
+      self.srclabel.grid(row=row, column= 0, sticky='e')
       self.srcname = Label(self, width=40, textvar=self.srcnamevar)
-      self.srcname.grid(row=row, column=1, columnspan=2, sticky=W)
+      self.srcname.grid(row=row, column=1, columnspan=2, sticky='w')
 
 #Page control frame
       pgcontframe = ttk.Frame(self)
-      self.lbutton2 = ttk.Button(pgcontframe, style='Left2.TButton',text='', command=self.pageminus)
-      self.rbutton2 = ttk.Button(pgcontframe, style='Right2.TButton',text='', command=self.pageplus)
+      self.lbutton2 = ttk.Button(pgcontframe, style='Left2.TButton',text='', 
+                                 command=self.pageminus)
+      self.rbutton2 = ttk.Button(pgcontframe, style='Right2.TButton',text='', 
+                                 command=self.pageplus)
       self.lbutton2.grid(row=1,column=1)
       self.rbutton2.grid(row=1,column=3)
       self.curpgeLabel = Label(pgcontframe, text='0')
@@ -118,15 +142,17 @@ class window(tk.Tk):
       self.curtotLabel.grid(row=2, column=3)
       pgcontframe.grid(row=row, column=2, rowspan=2)
 
-      self.deletebutton = Button(self, text="Delete",width=4,command=self.delete)
+      self.deletebutton = Button(self, text="Delete",width=4,
+                                 command=self.delete)
       self.deletebutton.grid(row=row,column=3)
-      self.cancelbutton = Button(self, text="Exit",width=4,command=self.unified_termination)
+      self.cancelbutton = Button(self, text="Exit",width=4,
+                                 command=self.unified_termination)
       self.cancelbutton.grid(row=row,column=4)
       row = row + 1
       self.destlabel = Label(self, text="dest:")
-      self.destlabel.grid(row=row, column= 0, sticky=E)
+      self.destlabel.grid(row=row, column= 0, sticky='e')
       self.destname = Entry(self, width=40, textvar=self.destnamevar)
-      self.destname.grid(row=row, column=1, columnspan=2, sticky=W)
+      self.destname.grid(row=row, column=1, columnspan=2, sticky='w')
       self.dobutton = Button(self, text="Move",width=4,command=self.movebutton)
       self.dobutton.grid(row=row,column=3)
       self.skipbutton = Button(self, text="Skip",width=4,command=self.dontmove)
@@ -141,8 +167,10 @@ class window(tk.Tk):
 
 #force frame
       forceframe = ttk.Frame(self)
-      self.flbutton2 = ttk.Button(forceframe, style='Left2.TButton',text='', command=self.forceprev)
-      self.frbutton2 = ttk.Button(forceframe, style='Right2.TButton',text='', command=self.forcenext)
+      self.flbutton2 = ttk.Button(forceframe, style='Left2.TButton',text='', 
+                                 command=self.forceprev)
+      self.frbutton2 = ttk.Button(forceframe, style='Right2.TButton',text='', 
+                                 command=self.forcenext)
       self.flbutton2.grid(row=1,column=1)
       self.frbutton2.grid(row=1,column=4)
       self.forcemonth = monthsel(forceframe)
@@ -153,10 +181,12 @@ class window(tk.Tk):
       self.forceyear.bind('<KeyRelease>', self.forcedate)
       forceframe.grid(row=row, column=1)
 
-      self.forceautockbox = ttk.Checkbutton(self, text='Autoincrement', variable=self.forceautockboxvar)
+      self.forceautockbox = ttk.Checkbutton(self, text='Autoincrement', 
+                                            variable=self.forceautockboxvar)
       self.forceautockbox.state(['!selected'])
       self.forceautockbox.grid(row=row, column=2)
-      self.forceckbox = ttk.Checkbutton(self, text='Use this as date', variable=self.forceckboxvar, command=self.forcedate)
+      self.forceckbox = ttk.Checkbutton(self, text='Use this as date', 
+                         variable=self.forceckboxvar, command=self.forcedate)
       self.forceckbox.state(['!selected'])
       self.forceckbox.grid(row=row, column=3, columnspan=2)
       row = row + 1
@@ -165,8 +195,8 @@ class window(tk.Tk):
       row = row + 1
       self.srcdirlab = Label(self, text="source dir:")
       self.srcdirlab.grid(row=row, column=0)
-      self.srcdirdis = Label(self, text=srcdir)
-      self.srcdirdis.grid(row=row, column=1, columnspan=3, sticky=W)
+      self.srcdirdis = Label(self, text=self.srcdir)
+      self.srcdirdis.grid(row=row, column=1, columnspan=3, sticky='w')
       self.srcdirsel = Button(self, text="Sel",width=4,command=self.picsrcdir)
       self.srcdirsel.grid(row=row, column=4)
       row = row + 1
@@ -176,88 +206,49 @@ class window(tk.Tk):
       self.dstdirlab = Label(self, text="dest dirs:")
       self.dstdirlab.grid(row=row, column=0)
       self.dstdirdis = Label(self,width=40, text=self.destdirtree)
-      self.dstdirdis.grid(row=row, column=1, columnspan=3, sticky=W)
+      self.dstdirdis.grid(row=row, column=1, columnspan=3, sticky='w')
       self.dstdirsel = Button(self, text="Sel",width=4,command=self.picdstdir)
       self.dstdirsel.grid(row=row, column=4)
       row = row + 1
       self.sep1 = ttk.Separator(self,orient=tk.HORIZONTAL)
       self.sep1.grid(row=row, column=0, columnspan=5, sticky='ew')
       row = row + 1
-      self.autosel = ttk.Checkbutton(self,text='Auto select destination directory', variable = self.autoselvar, command=self.toggleauto)
+      self.autosel = ttk.Checkbutton(self,
+             text='Auto select destination directory', 
+             variable = self.autoselvar, command=self.toggleauto)
       self.autosel.grid(row=row, column=1, columnspan=2, sticky='w')
       row = row + 1
       self.sep1 = ttk.Separator(self,orient=tk.HORIZONTAL)
       self.sep1.grid(row=row, column=0, columnspan=5, sticky='ew')
       row = row + 1
-      self.showless = ttk.Checkbutton(self,text='Show less used', variable = self.showlessvar, command=self.showlessused)
+      self.showless = ttk.Checkbutton(self,text='Show less used', 
+                     variable = self.showlessvar, command=self.showlessused)
       self.showless.grid(row=row, column=1,columnspan=2, sticky='w')
-      self.isless = ttk.Checkbutton(self,text='Entry is less used', variable= self.islessvar)
+      self.isless = ttk.Checkbutton(self,text='Entry is less used', 
+                     variable= self.islessvar)
       self.isless.state(['!selected'])
       self.isless.grid(row=row, column=3,columnspan=2, sticky='w')
       row = row + 1
       self.idpattlabel = Label(self, text="id pattern:", anchor='e')
-      self.idpattlabel.grid(row=row, column= 0, sticky=E)
+      self.idpattlabel.grid(row=row, column= 0, sticky='e')
       self.idpattname = Entry(self, width=45, textvar=self.idpattnamevar)
-      self.idpattname.grid(row=row, column=1, columnspan=4, sticky=W)
+      self.idpattname.grid(row=row, column=1, columnspan=4, sticky='w')
       self.idbutton = Button(self, text="Get",width=4,command=self.usermodidget)
       self.idbutton.grid(row=row,column=4)
       row = row + 1
       self.pattlabel = Label(self, text="rename pattern:", anchor='e')
-      self.pattlabel.grid(row=row, column= 0, sticky=E)
+      self.pattlabel.grid(row=row, column= 0, sticky='e')
       self.pattname = Entry(self, width=45, textvar=self.pattnamevar)
       self.pattname.bind('<KeyRelease>', self.forcedate)
-      self.pattname.grid(row=row, column=1, columnspan=4, sticky=W)
-      self.pattbutton = Button(self, text="Save",width=4,command=self.savedirinfo)
+      self.pattname.grid(row=row, column=1, columnspan=4, sticky='w')
+      self.pattbutton = Button(self, text="Save",width=4,
+                               command=self.savedirinfo)
       self.pattbutton.grid(row=row,column=4)
       row = row + 1
       self.dirlist=dirlistpanel(self, self.config)
       self.dirlist.grid(row=row,column=0,columnspan=5,sticky='nsew')
 
-#worklist routines.
-   def addtoworklist(self, n):
-      if self.worklist.add(n):
-         self.setworklistposdisplay()
-         self.loadworkfile()
-      self.setworklistsizedisplay()
-   def delcurfromworklist(self):
-      if self.worklist.deletecurrent():
-         self.setworklistposdisplay()
-         self.loadworkfile()
-      self.setworklistsizedisplay()
-   def pageminus(self):
-      if self.worklist.prevloc():
-         self.setworklistposdisplay()
-         self.loadworkfile()
-   def pageplus(self):
-      if self.worklist.nextloc():
-         self.setworklistposdisplay()
-         self.loadworkfile()
-   def setworklistposdisplay(self):
-      self.curpgeLabel.config(text = self.worklist.pos())
-   def setworklistsizedisplay(self):
-      self.curtotLabel.config(text = self.worklist.size())
-
-   def config_get(self):
-      print(self.config.getshowless())
-      print(self.config.getautosel())
-      self.showlessvar.set(self.config.getshowless())
-      self.autoselvar.set(self.config.getautosel())
-      self.srcdir = self.config.getsourcedir()
-      self.destdirtree = self.config.getdestdir()
-
-      #This makes tk more responsive to control-C from launching terminal
-   def check(self):
-      self.after(500,self.check)
-
-   def run(self):
-      self.observer_start()
-      self.config_get()
-      self.wincreate()
-      self.setdirlist()
-      self.lift() #maybe
-      self.attributes('-topmost', True) #maybe
-      self.check()
-      self.mainloop()
+#GUI action routines
 
 #Get the source filename to use as pattern for auto identification
    def usermodidget(self):
@@ -287,13 +278,35 @@ class window(tk.Tk):
       self.config.setautosel(self.autoselvar.get())
 ##      self.config.writeconfig()
 
+
+
+#worklist routines.
+   def addtoworklist(self, n):
+      if self.worklist.add(n):
+         self.setworklistposdisplay()
+         self.loadworkfile()
+      self.setworklistsizedisplay()
+   def delcurfromworklist(self):
+      if self.worklist.deletecurrent():
+         self.setworklistposdisplay()
+         self.loadworkfile()
+      self.setworklistsizedisplay()
+   def pageminus(self):
+      if self.worklist.prevloc():
+         self.setworklistposdisplay()
+         self.loadworkfile()
+   def pageplus(self):
+      if self.worklist.nextloc():
+         self.setworklistposdisplay()
+         self.loadworkfile()
+   def setworklistposdisplay(self):
+      self.curpgeLabel.config(text = self.worklist.pos())
+   def setworklistsizedisplay(self):
+      self.curtotLabel.config(text = self.worklist.size())
+
    def setdirlist(self):
       self.dstdirdis.config(text=self.destdirtree)
       self.dirlist.settopdir(self.destdirtree)
-
-   def userdirselection(self, idpattern,renamepattern):
-##      if len(self.destnamevar.get()) > 0:
-      self.setdestfilename()
 
    def observer_start(self):
       self.observer = watchdog.observers.Observer()
@@ -321,6 +334,7 @@ class window(tk.Tk):
          self.setdirlist()
 
 #Button controls for source file.  Delete, Move, Skip
+#skip button, and also called by delete button processing
    def dontmove(self):
            #get next file or wait
          #clear source
@@ -334,7 +348,8 @@ class window(tk.Tk):
          #dest = self.dirlist.getselecteddir()
          #set dest name
          #execute copy from current name to destdir/destname
-      t = threading.Thread(target=self.moveitthread, args=(self.worklist.current(), self.destnamevar.get()))
+      t = threading.Thread(target=self.moveitthread, 
+                      args=(self.worklist.current(), self.destnamevar.get()))
       t.start()
          #clear source
       self.clearandgetnext()
@@ -342,18 +357,20 @@ class window(tk.Tk):
          if self.forceautockboxvar.get() == 1:
             self.forcenext()
 
+#delete button pressed
    def delete(self): 
-      ans = messagebox.askyesno(title='Confirm Delete', message = 'Really Delete?')
+      ans = messagebox.askyesno(title='Confirm Delete', 
+                                message = 'Really Delete?')
       if ans == True:
          pathlib.Path.unlink(self.worklist.current())
          self.dontmove()
 
-#called when move button hit
+#called when move button pressed
    def movebutton(self):
       dest = self.destnamevar.get()
       if os.path.exists(dest):
-         ans = messagebox.askyesno(title='Dest Conflict', message = 'Destination exists.  Overwrite?')
-
+         ans = messagebox.askyesno(title='Dest Conflict', 
+                                   message = 'Destination exists.  Overwrite?')
          if ans == True:
             self.domove()
              #create warning, and check if we want to overwrite
@@ -380,7 +397,7 @@ class window(tk.Tk):
       fname, fext = os.path.splitext(f)
       return fext
 
-    #callback when key is released in Entry
+    #callback when date to force is modified
    def forcedate(*args):
       self = args[0]
       self.setdestfilename()
@@ -435,6 +452,8 @@ class window(tk.Tk):
          f = self.worklist.current()
          self.srcnamevar.set(os.path.basename(f))
          self.pdfp.setfile(f)
+         if self.autoselvar.get() == 1:
+            self.guessbest()
          self.setdestfilename()
 
    def unified_termination(self):
@@ -442,7 +461,8 @@ class window(tk.Tk):
 #checking self.work.empty() and also whether we are displaying a file
 #TODO: Change to check that worklist is empty
       if self.worklist.isempty() == False:
-         ans = messagebox.askyesno(title='Exit with work', message = 'Work remains, really exit?')
+         ans = messagebox.askyesno(title='Exit with work', 
+                                   message = 'Work remains, really exit?')
          if ans == False:
             return
       self.finishup()
@@ -461,6 +481,9 @@ class window(tk.Tk):
       self.finishup()
       self.destroy()
 
+#TODO: go through id patterns against source filename and select best match
+#called when loading new file if box is checked
+#changes selected dir to best score
    def guessbest(self):
       print('guessing')
 
@@ -468,7 +491,7 @@ class window(tk.Tk):
 class monthsel(ttk.Combobox):
    def __init__(self, s):
       super().__init__(s,width=8, height=12)
-      self['values'] = [month_name[m][0:3]+' ('+str(m)+')' for m in range(1, 13)]
+      self['values']=[month_name[m][0:3]+' ('+str(m)+')' for m in range(1, 13)]
       self.current(newindex=datetime.datetime.now().month-1)
    def prev(self):
       m = self.current()
@@ -493,7 +516,8 @@ class monthsel(ttk.Combobox):
    def get():
       return self.current() + 1
 
-class yearsel(Entry):
+
+class yearsel(tk.Entry):
    def __init__(self, s):
       self.yearvar = tk.StringVar()
       super().__init__(s,textvar = self.yearvar, width=6)
@@ -507,14 +531,16 @@ class yearsel(Entry):
       y = y + 1
       self.yearvar.set(str(y))
 
-class pdfpreview(Frame):
+
+class pdfpreview(tk.Frame):
    def __init__(self, c):
       super().__init__(c)
       self.grid_rowconfigure(0,weight=1)
       self.grid_columnconfigure(0,weight=1)
-      self.canvas = Canvas(self)
+      self.canvas = tk.Canvas(self)
       self.canvas.grid(row=0,column=0,sticky='nsew')
-      self.vscroll = ttk.Scrollbar(self,orient=tk.VERTICAL,command=self.canvas.yview)
+      self.vscroll = ttk.Scrollbar(self,orient=tk.VERTICAL,
+                                   command=self.canvas.yview)
       self.canvas['yscrollcommand'] = self.vscroll.set
       self.vscroll.grid(row=0,column=1,sticky='ns')
       self.clear()
@@ -569,18 +595,20 @@ class pdfpreview(Frame):
    def resize_canvas(self, e):
       self.setpages(e.width-2, e.height-2) #-2 for border
 
-#TODO: Fix redisplay when making changes and saves.
-class dirlistpanel(Frame):
+
+class dirlistpanel(tk.Frame):
    def __init__(self, c, config):
       super().__init__(c)
       self.select_cb = c  
       self.config = config
-      self.listvar = Variable()
+      self.listvar = tk.Variable()
       self.grid_rowconfigure(0,weight=1)
       self.grid_columnconfigure(0,weight=1)
-      self.list = Listbox(self, height=10, listvariable=self.listvar, exportselection=False)
+      self.list = Listbox(self, height=10, listvariable=self.listvar, 
+                          exportselection=False)
       self.list.grid(row=0,column=0,sticky='nsew')
-      self.vscroll = ttk.Scrollbar(self,orient=tk.VERTICAL,command=self.list.yview)
+      self.vscroll = ttk.Scrollbar(self,orient=tk.VERTICAL,
+                                    command=self.list.yview)
       self.list['yscrollcommand'] = self.vscroll.set
       self.vscroll.grid(row=0,column=1,sticky='ns')
       self.list.bind('<<ListboxSelect>>', self.userselect)
@@ -595,12 +623,14 @@ class dirlistpanel(Frame):
       self.select_cb.setpatterndisplay()
 
    def getsubdirs(self):
+      allsubfolders = []
       subfolders = []
       if os.path.isdir(self.topdir):
          for root, dirs, files in os.walk(self.topdir):
             for d in dirs:
-               subfolders.append(os.path.join(root,d))
-#old way: subfolders = [ f for f in os.scandir(self.topdir) if f.is_dir() and not f.name.startswith('.') ]
+               allsubfolders.append(os.path.join(root,d))
+                 #remove dot files
+         subfolders = [f for f in allsubfolders if not os.path.basename(f).startswith('.')]
          self.sortedsubfolders = sorted(subfolders, key=lambda s: s.lower())
       else:
          self.sortedsubfolders = []
@@ -613,11 +643,10 @@ class dirlistpanel(Frame):
       self.displaylist = []
       self.list.delete(0, tk.END)
       showless = self.select_cb.showlessvar.get()
-      topdirlen = len(self.select_cb.destdirtree) + 1
       for d in self.sortedsubfolders:
          (newname, pattern, lessused) = self.getinfo(d)
          if showless == 1 or lessused == 0:
-            self.displaylist.append(d[topdirlen:])
+            self.displaylist.append(os.path.basename(d))
             self.dirlist.append(d)
       self.listvar.set(self.displaylist)
       selrow = self.getselrow()
@@ -642,7 +671,6 @@ class dirlistpanel(Frame):
          full = os.path.join(self.topdir, self.dirlist[row])
          self.select_cb.setdestfilename()
          self.select_cb.setpatterndisplay() #TODO: Consolidate 2 lines
-#self.select_cb.userdirselection(self.dirlist[row].idpattern,self.dirlist[row].renamepattern)
 
 #TODO fix getting info from existing
    def getinfo(self,d):
@@ -727,6 +755,7 @@ class dirlistpanel(Frame):
          if showless == 0 and lessused == 1:  #redisplay if this one gets undisplayed
             self.displaytopdir()
 
+
 #manipulation routines return True if display should change
 class worklist():
    wlist = []
@@ -785,25 +814,23 @@ class eventhandle(watchdog.events.FileSystemEventHandler):
    def setclass(self, c):
       self.ourclass = c
 
-     #when a desired file is moved, put it on the work queue
+#this is the move after the browser finishes download
    def on_moved(self, event):
-          #this is the move after the browser finishes download
       dest = event.dest_path
       lowerdest = dest.lower()
       for ext in INTERESTINGEXTENSIONS:
          if lowerdest.endswith(ext):
-#            self.work.put(dest)
             self.ourclass.addtoworklist(dest)
             break
 
-class sighandle():
-   win = None
 
+class sighandle():
    def setwin(self,window):
       self.win = window
 
    def sigint_handler(self, sig, frame):
       self.win.unified_termination()
+
 
 #config file: ~/.config/msmove or if no .config, ~/.msmove
 #format: json
@@ -963,6 +990,8 @@ class configfile():
    def getautosel(self):
       return self.confdat['program']['autosel']
 
+
+#Used in scrolling canvases
 def on_mousewheel(event):
    # Determine which widget is currently under the mouse
    target_widget = event.widget
@@ -981,13 +1010,30 @@ def on_mousewheel(event):
          target_widget.yview_scroll(int(-1*(event.delta/120)), "units")
 
 def arguments(config):
-   p = argparse.ArgumentParser(description="move monthly statements")
+   p = argparse.ArgumentParser(description="move monthly statements from srcdir to destdir")
+   p.add_argument('-i', '--iconic',action='store_true', help='start iconified')
    p.add_argument('srcdir', nargs='?', default = config.getsourcedir())
    p.add_argument('destdirtree', nargs='?', default=config.getdestdir())
    args = p.parse_args();
-   return(os.path.expanduser(args.srcdir), os.path.expanduser(args.destdirtree))
+   return(os.path.expanduser(args.srcdir), 
+          os.path.expanduser(args.destdirtree),args.iconic)
 
-icon64 = """iVBORw0KGgoAAAANSUhEUgAAASwAAAEjBAMAAAB6BSGTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+def main():
+   config = configfile()
+   (srcdir, destdirtree, iconic) = arguments(config)
+   sig = sighandle()  #catch ctrl-c to exit
+   signal.signal(signal.SIGINT, sig.sigint_handler)
+   win = window(srcdir,destdirtree, config)
+   sig.setwin(win)
+   if iconic:
+      win.iconify()
+   else:
+      win.lift() #help make sure this appears on top
+   win.run()
+   win.finishup()
+
+icon64 = """
+iVBORw0KGgoAAAANSUhEUgAAASwAAAEjBAMAAAB6BSGTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
 MFBMVEVHcEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlTPQ5
 AAAAD3RSTlMA+wIh0+wMm2l/BKDAS7TfacAoAAAHIElEQVR42u2dzWtdRRiHp1OT2GNjuYv6sXEO
 XUlADFS7tHXjwk2LohYXJlAsKAgFEQWFFFxLulQ3vQTcZNPuXIiQP0C0CzeC2vwHdWiuaZqP13Pz
@@ -1024,14 +1070,4 @@ RB9dtiULZV6AXlyqno8sNvcy9CJeR9mDN31uuDm7GdfWZVb6cJXsz4V4UIMffY96Kkt25WyknBt+
 DoZnVnjJomW1w8/yM5ES8f/NycnJycnJycnJSZJ/AD3Dhv8Jszp/AAAAAElFTkSuQmCC"""
 
 if __name__ == '__main__':
-   global win
-        #initialize state of window
-   config = configfile()
-   (srcdir, destdirtree) = arguments(config)
-        #catch ctrl-c
-   sig = sighandle()
-   signal.signal(signal.SIGINT, sig.sigint_handler)
-   win = window(srcdir,destdirtree, config)
-   sig.setwin(win)
-   win.run()
-   win.finishup()
+   main()
